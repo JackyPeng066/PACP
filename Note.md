@@ -147,3 +147,64 @@ while read g0 g1; do
     ./aps_filter $L $g0 $g1
     
 done < "results/$L/${g_L}_weight.txt"
+
+
+
+# PACP Project Developer Notes
+
+此文件收錄專案的核心腳本、演算法邏輯設計與參數設定。
+
+## 1. 環境安裝腳本 (Windows)
+**檔名**: `install_pacp_env.bat`
+**用途**: 一鍵安裝 MSYS2, MinGW, Make, G++ 並自動設定 PATH。
+**用法**: 右鍵以「系統管理員身分」執行。
+
+```batch
+@echo off
+setlocal EnableDelayedExpansion
+chcp 65001 >nul
+
+:: ============================================================================
+:: PACP C++ 開發環境一鍵懶人包 (MSYS2 + Make + GCC + PATH)
+:: ============================================================================
+
+TITLE PACP 開發環境自動安裝中...
+
+:: 1. 權限檢查
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo [ERROR] 權限不足！請右鍵選擇「以系統管理員身分執行」。
+    pause
+    exit /b
+)
+
+set "INSTALL_DIR=C:\msys64"
+set "MSYS2_URL=[https://repo.msys2.org/distrib/x86_64/msys2-x86_64-latest.exe](https://repo.msys2.org/distrib/x86_64/msys2-x86_64-latest.exe)"
+set "INSTALLER_NAME=msys2-installer.exe"
+
+:: 2. 下載與安裝 MSYS2
+if exist "%INSTALL_DIR%" goto :UPDATE_PHASE
+echo [STEP 1/4] 下載 MSYS2...
+curl -L -o %INSTALLER_NAME% "%MSYS2_URL%"
+if not exist "%INSTALLER_NAME%" exit /b
+echo [STEP 2/4] 靜默安裝...
+%INSTALLER_NAME% in --confirm-command --accept-messages --root %INSTALL_DIR%
+del %INSTALLER_NAME%
+
+:UPDATE_PHASE
+:: 3. 更新與安裝工具 (base-devel, toolchain, make)
+echo [STEP 3/4] 安裝 g++, make...
+"%INSTALL_DIR%\usr\bin\bash.exe" -l -c "pacman -Syu --noconfirm"
+"%INSTALL_DIR%\usr\bin\bash.exe" -l -c "pacman -S --needed --noconfirm base-devel mingw-w64-ucrt-x86_64-toolchain make"
+
+:: 4. 設定 PATH (PowerShell)
+echo [STEP 4/4] 設定環境變數...
+set "BIN_UCRT=%INSTALL_DIR%\ucrt64\bin"
+set "BIN_USR=%INSTALL_DIR%\usr\bin"
+powershell -Command ^
+    "$path = [Environment]::GetEnvironmentVariable('Path', 'Machine');" ^
+    "if (-not $path.Contains('%BIN_UCRT%')) { [Environment]::SetEnvironmentVariable('Path', $path + ';%BIN_UCRT%', 'Machine'); }" ^
+    "if (-not $path.Contains('%BIN_USR%')) { [Environment]::SetEnvironmentVariable('Path', $path + ';%BIN_USR%', 'Machine'); }"
+
+echo [DONE] 安裝完成。請重啟 CMD/VSCode。
+pause
