@@ -12,6 +12,17 @@ void compute_acf(const Seq& s, std::vector<int>& acf_out) {
     }
 }
 
+void rotate_seq_left(Seq& s, int k) {
+    if (s.empty()) return;
+    int L = s.size();
+    k = k % L; 
+    if (k < 0) k += L;
+    
+    // 使用 std::rotate (需 include <algorithm>)
+    // 將前 k 個元素移到後面
+    std::rotate(s.begin(), s.begin() + k, s.end());
+}
+
 int calc_psl(const std::vector<int>& acf_a, const std::vector<int>& acf_b, int L) {
     int max_sidelobe = 0;
     for (int u = 1; u < L; ++u) { // 不看 u=0
@@ -70,6 +81,7 @@ void int_to_seq(int val, int L, Seq& s) {
         s[i] = ((val >> i) & 1) ? -1 : 1;
     }
 }
+
 
 void save_result_list(const std::string& filename, const std::vector<std::pair<Seq, Seq>>& results, int L, int psl) {
     std::ofstream outfile(filename);

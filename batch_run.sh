@@ -1,52 +1,83 @@
 #!/bin/bash
 
 # ============================================================
-# PACP Batch Runner (Range 29-99, Odd only)
-# Constraint: Find 1 pair per L
-# Timeout: 60 seconds per L
+# PACP Batch Runner (Custom Range & Limits)
+# Automates run.sh for a range of Odd Lengths (L)
 # ============================================================
 
-# 1. 預先編譯 (避免編譯時間算在第一個 L 的 60秒內)
+# 1. 參數檢查與 Usage 提示
+if [ "$#" -lt 4 ]; then
+    echo "========================================================"
+    echo "Usage: ./batch_run.sh <Start_L> <End_L> <Count> <Timeout>"
+    echo "--------------------------------------------------------"
+    echo "  <Start_L> : Start length (e.g., 29)"
+    echo "  <End_L>   : End length (e.g., 99)"
+    echo "  <Count>   : Target pairs to find per L (e.g., 1)"
+    echo "  <Timeout> : Max seconds per L (e.g., 60)"
+    echo "========================================================"
+    echo "Example: ./batch_run.sh 29 99 1 60"
+    exit 1
+fi
+
+START_L=$1
+END_L=$2
+TARGET_N=$3
+TIME_LIMIT=$4
+
+# 2. 預先編譯
 echo "[Batch] Pre-compiling executables..."
 make
+if [ $? -ne 0 ]; then
+    echo "[Error] Make failed. Aborting."
+    exit 1
+fi
 
-# 2. 開始迴圈：從 29 到 99，每次加 2
-for L in {29..99..2}; do
+echo "[Batch] Starting loop from L=$START_L to $END_L (Odd only)"
+echo "[Batch] Target: $TARGET_N pair(s) | Timeout: ${TIME_LIMIT}s"
+
+# 3. 開始迴圈
+# 使用 C-style for loop 以便逐一檢查
+for ((L=START_L; L<=END_L; L++)); do
+    
+    # 跳過偶數
+    if [ $((L % 2)) -eq 0 ]; then
+        continue
+    fi
+
     echo "========================================"
-    echo "[Batch] Processing L=$L (Target: 1 pair, Max Time: 60s)"
+    echo "[Batch] Processing L=$L (Target: $TARGET_N, Max: ${TIME_LIMIT}s)"
     echo "========================================"
 
-    # 執行 run.sh，並設定 60 秒逾時
-    # timeout 60s: 設定 60 秒限制
-    # ./run.sh $L 1: 呼叫你的主腳本，找 1 組
-    timeout 60s ./run.sh $L 1
+    # 執行 run.sh，並設定逾時
+    # timeout ${TIME_LIMIT}s: 設定秒數限制
+    timeout "${TIME_LIMIT}s" ./run.sh $L $TARGET_N
 
-    # 取得上一行指令的離開狀態碼 (Exit Status)
+    # 取得狀態碼
     status=$?
 
     if [ $status -eq 124 ]; then
-        # 狀態碼 124 代表被 timeout 強制終止
+        # 124 = Timeout
         echo ""
         echo "----------------------------------------"
-        echo "[Timeout] L=$L exceeded 60 seconds. Skipping to next..."
+        echo "[Timeout] L=$L exceeded ${TIME_LIMIT}s. Skipping..."
         echo "----------------------------------------"
     elif [ $status -eq 0 ]; then
-        # 狀態碼 0 代表成功執行完畢
+        # 0 = Success
         echo ""
         echo "----------------------------------------"
         echo "[Success] L=$L finished within time limit."
         echo "----------------------------------------"
     else
-        # 其他錯誤
+        # Other Errors
         echo ""
         echo "----------------------------------------"
         echo "[Error] L=$L failed with status $status."
         echo "----------------------------------------"
     fi
 
-    # 暫停 1 秒讓 I/O 緩衝區寫入，避免 Log 錯亂
+    # 緩衝
     sleep 1
 done
 
 echo ""
-echo "[Batch] All tasks (29-99) completed."
+echo "[Batch] All tasks completed."

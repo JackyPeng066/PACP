@@ -28,5 +28,6 @@ void save_result_list(const std::string& filename, const std::vector<std::pair<S
 // I/O
 bool load_result(const std::string& filename, Seq& a, Seq& b);
 void int_to_seq(int val, int L, Seq& s); // 移到這裡方便大家用
+void rotate_seq_left(Seq& s, int k);
 
 #endif
