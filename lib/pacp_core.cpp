@@ -75,39 +75,65 @@ void save_result_list(const std::string& filename, const std::vector<std::pair<S
     std::ofstream outfile(filename);
     if (!outfile.is_open()) return;
     
-    outfile << "Length: " << L << "\n";
-    outfile << "Best_PSL: " << psl << "\n";
-    outfile << "Total_Unique_Pairs: " << results.size() << "\n";
-    outfile << "================================\n";
+    outfile << "L=" << L << ",PSL=" << psl << ",Count=" << results.size() << "\n";
     
     for(const auto& p : results) {
+        // 輸出 A
         for(int x : p.first) outfile << (x==1 ? "+" : "-");
-        outfile << "\n";
+        
+        outfile << ","; // 逗號分隔
+        
+        // 輸出 B
         for(int x : p.second) outfile << (x==1 ? "+" : "-");
-        outfile << "\n";
+        
+        outfile << "\n"; // 換行
     }
     outfile.close();
 }
 
 bool load_result(const std::string& filename, Seq& a, Seq& b) {
-    // 簡單實作讀取 seed 用
     std::ifstream infile(filename);
     if(!infile.is_open()) return false;
-    // 略過 header，直接找 + - 
+    
     std::string s;
     std::vector<std::string> seqs;
+    
+    // 讀取檔案中所有包含 + 或 - 的 token
     while(infile >> s) {
-        if(s.find('+') != std::string::npos || s.find('-') != std::string::npos) {
-            seqs.push_back(s);
+        // 檢查是否包含分隔符號 ',' (適應新格式 A,B)
+        size_t comma_pos = s.find(',');
+        if (comma_pos != std::string::npos) {
+            // 找到逗號，拆分成兩段
+            std::string part1 = s.substr(0, comma_pos);
+            std::string part2 = s.substr(comma_pos + 1);
+            
+            // 簡單過濾，確保有內容
+            if(part1.find_first_of("+-10") != std::string::npos) seqs.push_back(part1);
+            if(part2.find_first_of("+-10") != std::string::npos) seqs.push_back(part2);
+        } 
+        else {
+            // 舊格式 (或只有一段)，直接判斷
+            if(s.find('+') != std::string::npos || s.find('-') != std::string::npos) {
+                if (s.length() > 1) seqs.push_back(s);
+            }
         }
     }
+    
     if(seqs.size() < 2) return false;
     
     auto parse = [](std::string in, Seq& out) {
-        out.resize(in.size());
-        for(size_t i=0; i<in.size(); ++i) out[i] = (in[i]=='+'||in[i]=='1')?1:-1;
+        std::vector<int> temp;
+        for(char c : in) {
+            if(c == '+' || c == '1') temp.push_back(1);
+            else if(c == '-' || c == '0') temp.push_back(-1);
+            // 忽略其他字元 (如逗號、空格)
+        }
+        out = temp;
     };
-    parse(seqs[0], a);
-    parse(seqs[1], b);
+    
+    // 取最後兩組序列作為種子
+    parse(seqs[seqs.size()-2], a);
+    parse(seqs[seqs.size()-1], b);
+    
     return true;
 }
