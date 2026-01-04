@@ -1,20 +1,26 @@
 @echo off
-title Anti-Shutdown Script (Close window to stop)
+title [NO-SLEEP KEEPER] Running... (Do not close)
+mode con: cols=50 lines=12
 color 0A
 
-echo ============================================
-echo   Anti-Shutdown Monitor
-echo   Interval: 30 Minutes (1800 seconds)
-echo   Status: Active
-echo ============================================
+echo ==================================================
+echo           NO-SLEEP KEEPER (F15 Ghost Key)
+echo ==================================================
+echo.
+echo   [STATUS] Active
+echo   [ACTION] Sending F15 key signal every 60s.
+echo   [NOTE]   This will NOT interfere with typing
+echo            or your running programs.
+echo.
+echo   Please MINIMIZE this window. DO NOT close it.
+echo ==================================================
 
-:start
-:: Try to abort shutdown
-shutdown /a >nul 2>&1
+:loop
+:: Use PowerShell to send the F15 key (Resets system idle timer)
+powershell -NoProfile -Command "$w = New-Object -ComObject WScript.Shell; $w.SendKeys('{F15}')"
 
-:: Display current time and status
-echo [%time:~0,8%] Abort command sent. Waiting 30 minutes...
+:: Wait 1800 seconds (Silent countdown)
+timeout /t 1800 >nul
 
-:: Wait 30 minutes (1800 seconds)
-timeout /t 1800 /nobreak >nul
-goto start
+:: Repeat
+goto loop
