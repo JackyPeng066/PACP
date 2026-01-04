@@ -1,22 +1,26 @@
 @echo off
 setlocal EnableDelayedExpansion
-:: 防止中文亂碼
-chcp 65001 >nul
 cd /d "%~dp0"
 
-TITLE PACP Environment Installer (Fixed)
+:: Define Colors for Output
+set "RESET= [0m"
+set "BOLD= [1m"
+set "RED= [31m"
+set "GREEN= [32m"
+set "YELLOW= [33m"
+set "CYAN= [36m"
+
+TITLE PACP Environment Installer (English Version)
 
 :: ============================================================================
-:: 1. 檢查管理員權限
+:: 1. Check Administrator Privileges
 :: ============================================================================
-echo [檢查] 正在確認系統管理員權限...
+echo Checking Administrator rights...
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     echo.
-    echo [ERROR] 權限不足！
-    echo ---------------------------------------------------------------
-    echo 請對此檔案 [按右鍵] -> 選擇 [以系統管理員身分執行]
-    echo ---------------------------------------------------------------
+    echo %RED%[ERROR] Access Denied!%RESET%
+    echo Please right-click this file and select "Run as Administrator".
     echo.
     pause
     exit /b
@@ -27,100 +31,99 @@ set "MSYS2_URL=https://repo.msys2.org/distrib/x86_64/msys2-x86_64-latest.exe"
 set "INSTALLER_NAME=msys2-installer.exe"
 
 :: ============================================================================
-:: 步驟 1：下載與安裝 MSYS2
+:: 2. Install MSYS2
 :: ============================================================================
 if exist "%INSTALL_DIR%" (
-    echo [INFO] 偵測到 %INSTALL_DIR% 已存在，跳過安裝，直接進行更新。
+    echo %YELLOW%[INFO] MSYS2 detected at %INSTALL_DIR%. Skipping installation.%RESET%
     goto :UPDATE_PHASE
 )
 
 echo.
-echo [STEP 1/4] 正在下載 MSYS2...
+echo %CYAN%[STEP 1/4] Downloading MSYS2...%RESET%
 curl -L -o %INSTALLER_NAME% "%MSYS2_URL%"
 
 if not exist "%INSTALLER_NAME%" (
-    echo [ERROR] 下載失敗，請檢查網路連線。
+    echo %RED%[ERROR] Download failed. Please check your internet connection.%RESET%
     pause
     exit /b
 )
 
 echo.
-echo [STEP 2/4] 正在安裝 MSYS2 (這需要幾分鐘，請勿關閉)...
+echo %CYAN%[STEP 2/4] Installing MSYS2...%RESET%
+echo %YELLOW%Please wait, this may take a few minutes. Do not close the window.%RESET%
 
-:: [修正重點]
-:: 1. 使用 start /wait 確保腳本會「等待」安裝跑完才繼續
-:: 2. 修正安裝參數：--default-answer --accept-licenses --root ... install
+:: Use start /wait to ensure the script pauses until installation is complete
 start /wait "" %INSTALLER_NAME% --default-answer --accept-licenses --root %INSTALL_DIR% install
 
 if not exist "%INSTALL_DIR%\usr\bin\bash.exe" (
-    echo [ERROR] 安裝似乎失敗了 (找不到 bash.exe)。
-    echo 請手動檢查是否已安裝至 C:\msys64
+    echo %RED%[ERROR] Installation failed. bash.exe not found.%RESET%
     pause
     exit /b
 )
 
-:: 刪除安裝檔
+:: Clean up installer
 del %INSTALLER_NAME%
-echo [INFO] MSYS2 安裝完成。
+echo %GREEN%[SUCCESS] MSYS2 Installed.%RESET%
 
 :UPDATE_PHASE
 :: ============================================================================
-:: 步驟 2：更新與安裝工具
+:: 3. Update and Install Tools (GCC, Make)
 :: ============================================================================
 echo.
-echo [STEP 3/4] 更新系統並安裝編譯工具 (G++, Make)...
+echo %CYAN%[STEP 3/4] Updating system and installing G++ / Make...%RESET%
 
 if not exist "%INSTALL_DIR%\usr\bin\bash.exe" (
-    echo [ERROR] 找不到 MSYS2 核心檔案。
+    echo %RED%[ERROR] MSYS2 core not found at %INSTALL_DIR%.%RESET%
     pause
     exit /b
 )
 
-:: 第一次呼叫：更新核心資料庫
+:: Update Core System
+echo %YELLOW%-> Updating Package Database...%RESET%
 "%INSTALL_DIR%\usr\bin\bash.exe" -l -c "pacman -Syu --noconfirm"
 
-:: 第二次呼叫：安裝工具鏈
-echo 正在安裝 base-devel, toolchain, make...
+:: Install Toolchain
+echo %YELLOW%-> Installing Toolchain (gcc, make, etc.)...%RESET%
 "%INSTALL_DIR%\usr\bin\bash.exe" -l -c "pacman -S --needed --noconfirm base-devel mingw-w64-ucrt-x86_64-toolchain make"
 
 :: ============================================================================
-:: 步驟 3：設定環境變數 (PATH)
+:: 4. Set Environment Variables
 :: ============================================================================
 echo.
-echo [STEP 4/4] 設定 Windows 環境變數 (PATH)...
+echo %CYAN%[STEP 4/4] Setting Environment Variables (PATH)...%RESET%
 
 set "BIN_UCRT=%INSTALL_DIR%\ucrt64\bin"
 set "BIN_USR=%INSTALL_DIR%\usr\bin"
 
-:: 使用 PowerShell 安全添加 PATH
+:: Use PowerShell to persistently add to System PATH
 powershell -Command "$p=[Environment]::GetEnvironmentVariable('Path','Machine'); if(-not $p.Contains('%BIN_UCRT%')){[Environment]::SetEnvironmentVariable('Path',$p+';%BIN_UCRT%','Machine');Write-Host '[ADDED] UCRT64'} else {Write-Host '[SKIP] UCRT64 exists'}; if(-not $p.Contains('%BIN_USR%')){[Environment]::SetEnvironmentVariable('Path',$p+';%BIN_USR%','Machine');Write-Host '[ADDED] USR/BIN'}"
 
 :: ============================================================================
-:: 驗證與結束
+:: Verification
 :: ============================================================================
 echo.
-echo ==================================================
-echo      安裝與設定全部完成！ (INSTALLATION COMPLETE)
-echo ==================================================
+echo %GREEN%==================================================%RESET%
+echo %GREEN%      INSTALLATION COMPLETE!                      %RESET%
+echo %GREEN%==================================================%RESET%
 echo.
-echo 正在驗證版本...
+echo Verifying installation...
 
-:: 暫時設定 PATH 以便立即驗證
+:: Temporarily set PATH for this session to verify immediately
 set "PATH=%BIN_UCRT%;%BIN_USR%;%PATH%"
 
 echo -----------------------------------
-echo Checking G++...
+echo %BOLD%Checking G++:%RESET%
 g++ --version | findstr "g++"
-if %errorLevel% neq 0 echo [WARN] G++ not found immediately (Re-open CMD might fix this).
+if %errorLevel% neq 0 echo %RED%[WARN] G++ not found immediately.%RESET%
 
 echo.
-echo Checking Make...
+echo %BOLD%Checking Make:%RESET%
 make --version | findstr "Make"
-if %errorLevel% neq 0 echo [WARN] Make not found immediately.
+if %errorLevel% neq 0 echo %RED%[WARN] Make not found immediately.%RESET%
 echo -----------------------------------
 
 echo.
-echo [重要] 請關閉此視窗，並重新開啟 VSCode 或 CMD。
-echo [IMPORTANT] Please CLOSE this window and restart VSCode/CMD.
+echo %YELLOW%[IMPORTANT] Please CLOSE this window and restart VSCode/CMD.%RESET%
+echo %YELLOW%           Then you can run 'make' or './run3.sh'.%RESET%
 echo.
 pause
