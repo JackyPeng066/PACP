@@ -1,24 +1,20 @@
 @echo off
-setlocal
-title Anti-Shutdown Timer (30 min interval)
+title Anti-Shutdown Script (Close window to stop)
 color 0A
 
 echo ============================================
-echo   Anti-Shutdown Script Activated
+echo   Anti-Shutdown Monitor
 echo   Interval: 30 Minutes (1800 seconds)
-echo   Status: Monitoring...
+echo   Status: Active
 echo ============================================
 
-:loop
-:: 執行取消關機指令
+:start
+:: Try to abort shutdown
 shutdown /a >nul 2>&1
 
-:: 取得當前時間並顯示
-set current_time=%time:~0,8%
-echo [%current_time%] Sent 'shutdown /a' command.
+:: Display current time and status
+echo [%time:~0,8%] Abort command sent. Waiting 30 minutes...
 
-:: 倒數 60 分鐘 (3600 秒)
-:: /nobreak 確保不會因為誤觸鍵盤而中斷倒數
-timeout /t 3600 /nobreak
-
-goto loop
+:: Wait 30 minutes (1800 seconds)
+timeout /t 1800 /nobreak >nul
+goto start
