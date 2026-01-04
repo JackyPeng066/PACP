@@ -1,0 +1,11 @@
+[Start] L=31 | Target=2 | Output: results/31/pacp_L31.txt
+[Start] L=31 | Target=2 | Output: results/31/pacp_L31.txt
+[Start] L=31 | Target=2 | Output: results/31/pacp_L31.txt
+[Start] L=31 | Target=2 | Output: results/31/pacp_L31.txt
+--------------------------------------------------
+ DYNAMIC OPTIMIZER | L=31 | Target=2
+ Alpha=0.999994 | MaxFlip=1 | NormFactor=0.0322581
+ Strategy: Legendre Phase Floating (Rotate A, Flip B)
+--------------------------------------------------
+[New Best] Step 1318 | PSL=2 (MSE=0)    
+[Done] Best PSL Found: 2 | Unique Count: 1

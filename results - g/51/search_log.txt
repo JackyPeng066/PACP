@@ -1,0 +1,8 @@
+[Start] L=51 | Target=2 | Count=1 (Internal: 1)
+--------------------------------------------------
+ TWO-LAYER OPTIMIZER | L=51 | Target=2
+ Alpha=0.999996 | MaxFlip=2 | InnerLimit=10200000
+ Strategy: Co-evolution (Chaos Scramble)
+--------------------------------------------------
+[New Best] GlobalStep 632219 | PSL=2 (MSE=0)    
+[Done] Best PSL Found: 2 | Unique Count: 1

@@ -1,0 +1,8 @@
+[Start] L=55 | Target=2 | Count=1 (Internal: 1)
+--------------------------------------------------
+ ROBUST OPTIMIZER | L=55 | Target=2
+ Alpha=0.999995 | InnerLimit=5500000
+ Strategy: Hybrid Restart (Chaos + Hard Reset)
+--------------------------------------------------
+[Running] G-Step 200000 | CurPSL=34 | Best=99999   [Running] G-Step 400000 | CurPSL=34 | Best=99999   [Running] G-Step 600000 | CurPSL=34 | Best=99999   [New Best] G-Step 624079 | PSL=2 (MSE=0)    
+[Done] Best PSL Found: 2 | Unique Count: 1
