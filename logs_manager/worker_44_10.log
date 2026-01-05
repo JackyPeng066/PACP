@@ -1,7 +1,0 @@
-[INIT] Worker=10 L=44
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[EVENT] Action=Dive BadK=0
-[EVENT] Action=VICTORY Worker=10
-[SYSTEM] Saved: ./results/44_PQCP/L44_PSL4_7bf6b97b.csv

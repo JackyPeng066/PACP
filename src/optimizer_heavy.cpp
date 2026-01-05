@@ -1,9 +1,7 @@
 /*
-   PACP Optimizer v14.0 - Active Climber & Extended Lengths
-   
-   [Usage]
-   Compile: g++ -O3 -std=c++17 -march=native -o bin/optimizer_csp.exe src/optimizer_csp.cpp -static
-   Run:     ./bin/optimizer_csp.exe <L> <OutDir> <WorkerID>
+   PACP Optimizer v15.1 - Heavyweight Edition (Cleaned)
+   Target: L >= 110
+   Strategy: Block Mutation + Plateau Search
 */
 
 #include <iostream>
@@ -19,7 +17,7 @@
 
 namespace fs = std::filesystem;
 
-// --- RNG (XorShift128 for speed) ---
+// --- RNG ---
 struct XorShift128 {
     uint32_t x, y, z, w;
     XorShift128(uint32_t seed) {
@@ -32,9 +30,9 @@ struct XorShift128 {
         return w = w ^ (w >> 19) ^ t ^ (t >> 8);
     }
     inline int next_int(int range) { return next() % range; }
+    inline double next_double() { return (double)next() / 4294967296.0; }
 };
 
-// --- Sequence State & Logic ---
 class SequenceState {
 public:
     int L;
@@ -48,17 +46,10 @@ public:
         rho_A.resize(L); rho_B.resize(L); sum_rho.resize(L);
     }
 
-    void randomize(XorShift128& rng, bool symmetric_start) {
+    void randomize(XorShift128& rng) {
         for(int i=0; i<L; ++i) {
             A[i] = (rng.next() & 1) ? 1 : -1;
             B[i] = (rng.next() & 1) ? 1 : -1;
-        }
-        if (symmetric_start) {
-            int half = (L + 1) / 2;
-            for(int i=0; i<half; ++i) {
-                A[L - 1 - i] = A[i]; 
-                B[L - 1 - i] = B[i]; 
-            }
         }
         full_recalc();
     }
@@ -87,7 +78,6 @@ public:
 
     struct MoveResult { int d_bad; long long d_viol; };
 
-    // O(L) Delta Update
     MoveResult evaluate_flip(int seq_idx, int p) const {
         const std::vector<int8_t>& seq = (seq_idx == 0) ? A : B;
         int val_p = seq[p];
@@ -103,14 +93,13 @@ public:
 
             int old_abs = std::abs(sum_rho[u]);
             int new_abs = std::abs(sum_rho[u] + delta);
-
+            
             bool was_bad = (old_abs > 4);
             bool is_bad = (new_abs > 4);
 
             if (was_bad && !is_bad) d_bad--;
             if (!was_bad && is_bad) d_bad++;
             
-            // Tie-breaker: violation magnitude
             int old_excess = was_bad ? (old_abs - 4) : 0;
             int new_excess = is_bad ? (new_abs - 4) : 0;
             d_viol += (new_excess - old_excess);
@@ -132,14 +121,23 @@ public:
         seq[p] = -val_p; 
         update_metrics(); 
     }
+
+    // --- Special: Block Randomization ---
+    // [FIXED] Removed unused 'seq' variable
+    void apply_block_mutation(int seq_idx, int start_idx, int len, XorShift128& rng) {
+        for(int k=0; k<len; ++k) {
+            int p = (start_idx + k) % L;
+            // 50% chance to flip this bit
+            if (rng.next_int(2) == 0) {
+                apply_flip(seq_idx, p);
+            }
+        }
+    }
 };
 
-// --- Save Logic (Only Saves Valid Solutions) ---
 void save_result(const std::string& out_dir, const SequenceState& st) {
     std::random_device rd;
     std::stringstream ss;
-    
-    // Double check
     int max_s = 0;
     for(int u=1; u<=st.L/2; ++u) max_s = std::max(max_s, std::abs(st.sum_rho[u]));
     
@@ -162,91 +160,84 @@ void save_result(const std::string& out_dir, const SequenceState& st) {
     }
 }
 
-// --- Solver Logic ---
 void run_solver(int L, const std::string& out_dir, int worker_id) {
     unsigned int seed = std::random_device{}() + (worker_id * 9999);
     XorShift128 rng(seed);
 
-    // Dynamic Parameters for Large L
-    int MIN_KICK = 2;
-    int MAX_KICK = std::max(4, L / 8); 
-    int STUCK_LIMIT = 1500; 
-    int FINE_TUNE_LIMIT = L * 50; 
+    int BLOCK_SIZE = std::max(4, L / 10); 
+    int STUCK_LIMIT = 2000; 
 
     SequenceState st(L);
     long long iteration = 0;
     long long restarts = 0;
 
-    std::cout << "[INIT] Worker=" << worker_id << " L=" << L << std::endl;
+    std::cout << "[INIT] Heavy Worker=" << worker_id << " L=" << L << " BlockSize=" << BLOCK_SIZE << std::endl;
 
     while (true) {
         restarts++;
-        // Start from random to avoid symmetry traps
-        st.randomize(rng, (rng.next_int(2) == 0));
+        st.randomize(rng); 
 
         int stuck = 0;
-        int fine_counter = 0;
         
         while (stuck < STUCK_LIMIT) { 
             iteration++;
             
-            // VICTORY CHECK
             if (st.bad_count == 0) {
                 std::cout << "[EVENT] Action=VICTORY Worker=" << worker_id << std::endl;
                 save_result(out_dir, st);
                 return; 
             }
 
-            if (st.bad_k_list.empty()) { st.update_metrics(); continue; }
-            
+            // --- Plateau Search Strategy ---
             bool move_made = false;
             int start_i = rng.next_int(L); 
             
-            // --- Fine Tuning (Greedy Descent) ---
             for (int scan = 0; scan < L; ++scan) {
                 int i = (start_i + scan) % L;
                 
-                // Try A
+                // Check A
                 auto resA = st.evaluate_flip(0, i);
-                if (resA.d_bad < 0 || (resA.d_bad == 0 && resA.d_viol < 0)) {
+                bool acceptA = (resA.d_bad < 0) || 
+                               (resA.d_bad == 0 && resA.d_viol < 0) ||
+                               (resA.d_bad == 0 && resA.d_viol == 0 && rng.next_double() < 0.15); 
+
+                if (acceptA) {
                     st.apply_flip(0, i);
                     move_made = true;
-                    if (st.bad_count <= 2) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
-                    stuck = 0;
+                    if (resA.d_bad < 0) stuck = 0; 
+                    if (st.bad_count <= 2 && resA.d_bad < 0) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
                     break; 
                 }
                 
-                // Try B
+                // Check B
                 auto resB = st.evaluate_flip(1, i);
-                if (resB.d_bad < 0 || (resB.d_bad == 0 && resB.d_viol < 0)) {
+                bool acceptB = (resB.d_bad < 0) || 
+                               (resB.d_bad == 0 && resB.d_viol < 0) ||
+                               (resB.d_bad == 0 && resB.d_viol == 0 && rng.next_double() < 0.15);
+
+                if (acceptB) {
                     st.apply_flip(1, i);
                     move_made = true;
-                    if (st.bad_count <= 2) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
-                    stuck = 0;
+                    if (resB.d_bad < 0) stuck = 0;
+                    if (st.bad_count <= 2 && resB.d_bad < 0) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
                     break;
                 }
             }
             
-            // --- Active Kick Strategy ---
-            if (move_made) {
-                fine_counter++;
-            } else {
-                // If stuck, apply variable force
-                int kick_strength = MIN_KICK;
-                
-                // Deep stuck -> Harder kick
-                if (stuck > 300) {
-                    kick_strength = MIN_KICK + rng.next_int(MAX_KICK - MIN_KICK);
-                }
-                
-                for(int f=0; f<kick_strength; ++f) {
-                    st.apply_flip(rng.next_int(2), rng.next_int(L));
-                }
-                
-                if (stuck % 100 == 0 && st.bad_count < 8) {
-                     std::cout << "[EVENT] Action=KICK Strength=" << kick_strength << " BadK=" << st.bad_count << std::endl;
-                }
+            // --- Block Mutation Strategy ---
+            if (!move_made) {
                 stuck++;
+                if (stuck % 20 == 0) {
+                    int target_seq = rng.next_int(2);
+                    int start_pos = rng.next_int(L);
+                    st.apply_block_mutation(target_seq, start_pos, BLOCK_SIZE, rng);
+                    
+                    if (stuck % 200 == 0) {
+                         std::cout << "[EVENT] Action=BLOCK_MUTATE Pos=" << start_pos << " BadK=" << st.bad_count << std::endl;
+                    }
+                }
+            } else {
+                if (st.bad_count > 4) stuck++; 
             }
             
             if (iteration % 50000 == 0) {
@@ -255,8 +246,6 @@ void run_solver(int L, const std::string& out_dir, int worker_id) {
                           << " BadK=" << st.bad_count 
                           << std::endl;
             }
-            
-            if (fine_counter > FINE_TUNE_LIMIT) break; 
         }
     }
 }

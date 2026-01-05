@@ -1,9 +1,0 @@
-[INIT] Worker=15 L=90
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=0
-[EVENT] Action=VICTORY Worker=15
-[SYSTEM] Saved: ./results/90_PQCP/L90_PSL4_405fb7b4.csv
