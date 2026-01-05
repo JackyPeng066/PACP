@@ -1,11 +1,0 @@
-[Start] L=37 | Target=2 | Output: results/37/pacp_L37.txt
-[Start] L=37 | Target=2 | Output: results/37/pacp_L37.txt
-[Start] L=37 | Target=2 | Output: results/37/pacp_L37.txt
-[Start] L=37 | Target=2 | Output: results/37/pacp_L37.txt
---------------------------------------------------
- DYNAMIC OPTIMIZER | L=37 | Target=2
- Alpha=0.999995 | MaxFlip=1 | NormFactor=0.027027
- Strategy: Co-evolution (Flip A & B)
---------------------------------------------------
-[New Best] Step 203608 | PSL=2 (MSE=0)    
-[Done] Best PSL Found: 2 | Unique Count: 1
