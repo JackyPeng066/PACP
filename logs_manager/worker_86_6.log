@@ -5,19 +5,7 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=50000 Restarts=22 BadK=11
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[STAT] Iter=100000 Restarts=44 BadK=4
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
+[STAT] Iter=50000 Restarts=22 BadK=18
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
@@ -28,24 +16,10 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=150000 Restarts=66 BadK=10
 [EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=200000 Restarts=87 BadK=14
+[STAT] Iter=100000 Restarts=44 BadK=11
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
@@ -53,12 +27,50 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=150000 Restarts=66 BadK=20
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=200000 Restarts=87 BadK=11
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=250000 Restarts=109 BadK=4
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=250000 Restarts=109 BadK=13
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
@@ -66,19 +78,12 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=300000 Restarts=131 BadK=13
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
+[STAT] Iter=300000 Restarts=131 BadK=14
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
@@ -86,19 +91,22 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [STAT] Iter=350000 Restarts=153 BadK=18
-[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=KICK BadK=7
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
+[STAT] Iter=400000 Restarts=174 BadK=23
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=400000 Restarts=174 BadK=15
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2

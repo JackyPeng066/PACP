@@ -1,16 +1,12 @@
 [INIT] Worker=2 L=58
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=KICK BadK=4
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=0
 [EVENT] Action=VICTORY Worker=2
-[SYSTEM] Saved: ./results/58_PQCP/L58_PSL4_17accebc.csv
+[SYSTEM] Saved: ./results/58_PQCP/L58_PSL4_c3aeb33b.csv

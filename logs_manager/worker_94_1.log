@@ -1,53 +1,13 @@
 [INIT] Worker=1 L=94
-[STAT] Iter=50000 Restarts=20 BadK=11
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=50000 Restarts=20 BadK=17
+[STAT] Iter=100000 Restarts=40 BadK=20
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=150000 Restarts=60 BadK=18
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=200000 Restarts=80 BadK=18
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
+[STAT] Iter=250000 Restarts=100 BadK=14
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=100000 Restarts=40 BadK=14
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=150000 Restarts=60 BadK=9
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=200000 Restarts=80 BadK=25
-[STAT] Iter=250000 Restarts=100 BadK=10
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=300000 Restarts=120 BadK=8
-[STAT] Iter=350000 Restarts=140 BadK=12
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=400000 Restarts=160 BadK=17
-[STAT] Iter=450000 Restarts=180 BadK=24
-[STAT] Iter=500000 Restarts=200 BadK=11
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=550000 Restarts=220 BadK=19
-[STAT] Iter=600000 Restarts=240 BadK=19
-[STAT] Iter=650000 Restarts=260 BadK=7
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=700000 Restarts=279 BadK=12
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=750000 Restarts=299 BadK=16
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=800000 Restarts=319 BadK=20
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=850000 Restarts=339 BadK=24
-[EVENT] Action=Dive BadK=1
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=900000 Restarts=359 BadK=19
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=950000 Restarts=379 BadK=6
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=1000000 Restarts=399 BadK=11
-[STAT] Iter=1050000 Restarts=419 BadK=13
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=1100000 Restarts=439 BadK=15

@@ -2,11 +2,8 @@
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=1
-[EVENT] Action=KICK BadK=5
 [EVENT] Action=Dive BadK=1
 [EVENT] Action=Dive BadK=1
-[EVENT] Action=KICK BadK=6
-[EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=0
 [EVENT] Action=VICTORY Worker=11
-[SYSTEM] Saved: ./results/44_PQCP/L44_PSL4_3ea61b5.csv
+[SYSTEM] Saved: ./results/44_PQCP/L44_PSL4_c6381ce0.csv

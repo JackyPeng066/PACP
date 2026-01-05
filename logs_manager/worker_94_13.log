@@ -1,33 +1,12 @@
 [INIT] Worker=13 L=94
-[STAT] Iter=50000 Restarts=20 BadK=17
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=50000 Restarts=20 BadK=20
 [STAT] Iter=100000 Restarts=40 BadK=11
 [EVENT] Action=Dive BadK=2
-[STAT] Iter=150000 Restarts=60 BadK=21
+[STAT] Iter=150000 Restarts=60 BadK=22
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=200000 Restarts=80 BadK=18
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=250000 Restarts=100 BadK=14
 [EVENT] Action=Dive BadK=2
 [EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=1
-[STAT] Iter=200000 Restarts=80 BadK=16
-[STAT] Iter=250000 Restarts=100 BadK=15
-[STAT] Iter=300000 Restarts=120 BadK=18
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=350000 Restarts=140 BadK=10
-[STAT] Iter=400000 Restarts=160 BadK=16
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=450000 Restarts=180 BadK=17
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=500000 Restarts=200 BadK=17
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=550000 Restarts=220 BadK=15
-[STAT] Iter=600000 Restarts=240 BadK=17
-[STAT] Iter=650000 Restarts=260 BadK=15
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=700000 Restarts=279 BadK=14
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[EVENT] Action=Dive BadK=2
-[STAT] Iter=750000 Restarts=299 BadK=14
-[EVENT] Action=Dive BadK=0
-[EVENT] Action=VICTORY Worker=13
-[SYSTEM] Saved: ./results/94_PQCP/L94_PSL4_3cec82c2.csv
