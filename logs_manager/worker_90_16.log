@@ -1,0 +1,28 @@
+[INIT] Worker=16 L=90
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=50000 Restarts=21 BadK=10
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=100000 Restarts=42 BadK=12
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=150000 Restarts=63 BadK=9
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=200000 Restarts=84 BadK=9
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=250000 Restarts=104 BadK=8
+[EVENT] Action=Dive BadK=0
+[EVENT] Action=VICTORY Worker=16
+[SYSTEM] Saved: ./results/90_PQCP/L90_PSL4_b0d14f38.csv

@@ -1,0 +1,7 @@
+[INIT] Worker=14 L=58
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=0
+[EVENT] Action=VICTORY Worker=14
+[SYSTEM] Saved: ./results/58_PQCP/L58_PSL4_54019fa5.csv

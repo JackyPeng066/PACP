@@ -1,0 +1,54 @@
+[INIT] Worker=15 L=86
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=KICK BadK=7
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=50000 Restarts=22 BadK=11
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=100000 Restarts=44 BadK=11
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=150000 Restarts=66 BadK=16
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=1
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[STAT] Iter=200000 Restarts=87 BadK=17
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=2
+[EVENT] Action=Dive BadK=0
+[EVENT] Action=VICTORY Worker=15
+[SYSTEM] Saved: ./results/86_PQCP/L86_PSL4_6ba2e446.csv

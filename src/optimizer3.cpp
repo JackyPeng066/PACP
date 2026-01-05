@@ -1,255 +1,259 @@
 /*
-   PACP Optimizer v5.1 - C++17 Compatible
-   Features:
-   1. 128-bit Bitwise Operations (POPCNT)
-   2. Template Metaprogramming (Compile-time Constants)
-   3. Xoshiro256++ RNG
-   4. Late Acceptance Hill Climbing (LAHC)
-   5. [Fix] Manual rotl implementation for C++17
+   PACP Optimizer v12.0 - Final Artifact
+   Usage: ./optimizer_csp <L> <OutDir> <WorkerID>
 */
 
 #include <iostream>
-#include <fstream>
 #include <vector>
+#include <cmath>
 #include <random>
 #include <chrono>
-#include <filesystem>
-#include <sstream>
 #include <algorithm>
-#include <cmath>
-#include <array>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 #include <cstring>
-#include <cstdint> // for uint64_t
-
-// 使用 GCC 內建 128-bit 整數
-typedef unsigned __int128 uint128;
 
 namespace fs = std::filesystem;
 
-// ---------------------------------------------------------
-// 高速亂數產生器 Xoshiro256++
-// ---------------------------------------------------------
-struct Xoshiro256 {
-    uint64_t s[4];
-
-    Xoshiro256(uint64_t seed) {
-        // 使用 SplitMix64 初始化狀態
-        uint64_t z = (seed += 0x9e3779b97f4a7c15);
-        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-        z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-        s[0] = z ^ (z >> 31);
-        z = (seed += 0x9e3779b97f4a7c15);
-        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-        z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-        s[1] = z ^ (z >> 31);
-        z = (seed += 0x9e3779b97f4a7c15);
-        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-        z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-        s[2] = z ^ (z >> 31);
-        z = (seed += 0x9e3779b97f4a7c15);
-        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-        z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-        s[3] = z ^ (z >> 31);
+// --- RNG ---
+struct XorShift128 {
+    uint32_t x, y, z, w;
+    XorShift128(uint32_t seed) {
+        x = seed; y = 362436069; z = 521288629; w = 88675123;
+        for(int i=0; i<20; ++i) next();
     }
+    inline uint32_t next() {
+        uint32_t t = x ^ (x << 11);
+        x = y; y = z; z = w;
+        return w = w ^ (w >> 19) ^ t ^ (t >> 8);
+    }
+    inline int next_int(int range) { return next() % range; }
+};
 
-    // [Fix] 手動實作 rotl 以相容 C++17
-    static inline uint64_t rotl(const uint64_t x, int k) {
-        return (x << k) | (x >> (64 - k));
+// --- State ---
+class SequenceState {
+public:
+    int L;
+    std::vector<int8_t> A, B;
+    std::vector<int> rho_A, rho_B, sum_rho;
+    std::vector<int> bad_k_list;
+    int bad_count = 0;
+
+    SequenceState(int length) : L(length) {
+        A.resize(L); B.resize(L);
+        rho_A.resize(L); rho_B.resize(L); sum_rho.resize(L);
     }
 
-    inline uint64_t next() {
-        const uint64_t result = rotl(s[0] + s[3], 23) + s[0];
-        const uint64_t t = s[1] << 17;
-        s[2] ^= s[0];
-        s[3] ^= s[1];
-        s[1] ^= s[2];
-        s[0] ^= s[3];
-        s[2] ^= t;
-        s[3] = rotl(s[3], 45);
-        return result;
+    void randomize(XorShift128& rng, bool symmetric_start) {
+        for(int i=0; i<L; ++i) {
+            A[i] = (rng.next() & 1) ? 1 : -1;
+            B[i] = (rng.next() & 1) ? 1 : -1;
+        }
+        if (symmetric_start) {
+            int half = (L + 1) / 2;
+            for(int i=0; i<half; ++i) {
+                A[L - 1 - i] = A[i]; 
+                B[L - 1 - i] = B[i]; 
+            }
+        }
+        full_recalc();
     }
-    
-    // 產生 0 或 1
-    inline int next_bit() {
-        return next() & 1;
+
+    void full_recalc() {
+        std::fill(rho_A.begin(), rho_A.end(), 0);
+        std::fill(rho_B.begin(), rho_B.end(), 0);
+        for (int u = 0; u < L; ++u) {
+            for (int i = 0; i < L; ++i) {
+                rho_A[u] += A[i] * A[(i + u) % L];
+                rho_B[u] += B[i] * B[(i + u) % L];
+            }
+            sum_rho[u] = rho_A[u] + rho_B[u];
+        }
+        update_metrics();
     }
-    
-    // 產生 0 ~ range-1
-    inline int next_int(int range) {
-        return next() % range;
+
+    void update_metrics() {
+        bad_k_list.clear();
+        int check_limit = L / 2; 
+        for (int u = 1; u <= check_limit; ++u) {
+            if (std::abs(sum_rho[u]) > 4) bad_k_list.push_back(u);
+        }
+        bad_count = bad_k_list.size();
+    }
+
+    struct MoveResult { int d_bad; long long d_viol; };
+
+    // Delta update logic
+    MoveResult evaluate_flip(int seq_idx, int p) const {
+        const std::vector<int8_t>& seq = (seq_idx == 0) ? A : B;
+        int val_p = seq[p];
+        int d_bad = 0;
+        long long d_viol = 0;
+        int check_limit = L / 2;
+
+        for (int u = 1; u <= check_limit; ++u) {
+            int p_plus = (p + u); if (p_plus >= L) p_plus -= L;
+            int p_minus = (p - u); if (p_minus < 0) p_minus += L;
+            int delta = -2 * val_p * (seq[p_plus] + seq[p_minus]);
+            if (delta == 0) continue; 
+
+            int old_abs = std::abs(sum_rho[u]);
+            int new_abs = std::abs(sum_rho[u] + delta);
+
+            bool was_bad = (old_abs > 4);
+            bool is_bad = (new_abs > 4);
+
+            if (was_bad && !is_bad) d_bad--;
+            if (!was_bad && is_bad) d_bad++;
+            
+            // Heuristic tie-breaker: reduce total violation magnitude
+            int old_excess = was_bad ? (old_abs - 4) : 0;
+            int new_excess = is_bad ? (new_abs - 4) : 0;
+            d_viol += (new_excess - old_excess);
+        }
+        return {d_bad, d_viol};
+    }
+
+    void apply_flip(int seq_idx, int p) {
+        std::vector<int8_t>& seq = (seq_idx == 0) ? A : B;
+        std::vector<int>& rho = (seq_idx == 0) ? rho_A : rho_B;
+        int val_p = seq[p];
+        for (int u = 1; u < L; ++u) {
+             int p_plus = (p + u); if (p_plus >= L) p_plus -= L;
+             int p_minus = (p - u); if (p_minus < 0) p_minus += L;
+             int delta = -2 * val_p * (seq[p_plus] + seq[p_minus]);
+             rho[u] += delta;
+             sum_rho[u] += delta;
+        }
+        seq[p] = -val_p; 
+        update_metrics(); 
     }
 };
 
-// ---------------------------------------------------------
-// 核心運算 (Template L 為編譯期常數)
-// ---------------------------------------------------------
-
-inline int popcount128(uint128 x) {
-    uint64_t low = (uint64_t)x;
-    uint64_t high = (uint64_t)(x >> 64);
-    return __builtin_popcountll(low) + __builtin_popcountll(high);
-}
-
-template <int L>
-inline uint128 rotate_left(uint128 x, int k) {
-    // 因為 L 是 Template，MASK 會在編譯時直接變成常數，不用運算
-    constexpr uint128 MASK = ((uint128)1 << L) - 1;
-    
-    // 這些運算會被編譯器高度優化
-    return ((x << k) & MASK) | (x >> (L - k));
-}
-
-// 存檔
-void save_result(const std::string& out_dir, uint128 A, uint128 B, int L) {
-    if (!fs::exists(out_dir)) fs::create_directories(out_dir);
-    auto now = std::chrono::system_clock::now().time_since_epoch().count();
+// --- Save Logic ---
+void save_result(const std::string& out_dir, const SequenceState& st) {
     std::random_device rd;
     std::stringstream ss;
-    ss << out_dir << "/L" << L << "_" << now << "_" << std::hex << rd() << ".csv";
+    
+    // Check max PSL just to be sure
+    int max_s = 0;
+    for(int u=1; u<=st.L/2; ++u) max_s = std::max(max_s, std::abs(st.sum_rho[u]));
+    
+    // Clean path string
+    std::string clean_dir = out_dir;
+    if (!clean_dir.empty() && clean_dir.back() == '/') clean_dir.pop_back();
+
+    if (!fs::exists(clean_dir)) fs::create_directories(clean_dir);
+
+    ss << clean_dir << "/L" << st.L << "_PSL" << max_s << "_" << std::hex << rd() << ".csv";
     
     std::ofstream outfile(ss.str());
-    outfile << L << ",4,";
-    // Bit 0 -> '+' (1), Bit 1 -> '-' (-1)
-    for(int i=0; i<L; ++i) {
-        outfile << (((A >> i) & 1) ? '-' : '+'); 
+    if (outfile.is_open()) {
+        outfile << st.L << "," << max_s << ",";
+        for(auto x : st.A) outfile << (x==1 ? '+' : '-'); 
+        outfile << ",";
+        for(auto x : st.B) outfile << (x==1 ? '+' : '-');
+        outfile << "\n";
+        outfile.close();
+        std::cout << "[SYSTEM] Saved: " << ss.str() << std::endl;
     }
-    outfile << ",";
-    for(int i=0; i<L; ++i) {
-        outfile << (((B >> i) & 1) ? '-' : '+');
-    }
-    outfile << "\n";
-    outfile.close();
 }
 
-template <int L>
-bool strict_check(uint128 A, uint128 B) {
-    int cnt = 0;
-    for (int k = 1; k < L; ++k) {
-        int diff_A = popcount128(A ^ rotate_left<L>(A, k));
-        int pacf_A = L - 2 * diff_A;
-        
-        int diff_B = popcount128(B ^ rotate_left<L>(B, k));
-        int pacf_B = L - 2 * diff_B;
-        
-        int sum = pacf_A + pacf_B;
-        if (sum != 0) {
-            cnt++;
-            if (std::abs(sum) != 4) return false;
-        }
-    }
-    return (cnt == 2);
-}
+// --- Solver Loop ---
+void run_solver(int L, const std::string& out_dir, int worker_id) {
+    unsigned int seed = std::random_device{}() + (worker_id * 7777);
+    XorShift128 rng(seed);
 
-// ---------------------------------------------------------
-// 演算法核心：針對特定 L 的優化實例
-// ---------------------------------------------------------
-template <int L>
-void run_optimization(const std::string& out_dir) {
-    // 隨機初始化
-    uint64_t seed_val = std::chrono::system_clock::now().time_since_epoch().count() + std::random_device{}();
-    Xoshiro256 rng(seed_val);
-
-    uint128 A = 0, B = 0;
-    auto rand_init = [&]() {
-        A = 0; B = 0;
-        for(int i=0; i<L; ++i) {
-            if(rng.next_bit()) A |= ((uint128)1 << i);
-            if(rng.next_bit()) B |= ((uint128)1 << i);
-        }
-    };
-    rand_init();
-
-    // 初始能量計算 lambda (Template 版)
-    auto calc_energy = [&](uint128 sA, uint128 sB) -> long long {
-        long long e = 0;
-        for (int k = 1; k < L; ++k) {
-            int diff_A = popcount128(sA ^ rotate_left<L>(sA, k));
-            int pacf_A = L - 2 * diff_A;
-            
-            int diff_B = popcount128(sB ^ rotate_left<L>(sB, k));
-            int pacf_B = L - 2 * diff_B;
-            
-            int sum = pacf_A + pacf_B;
-            e += (long long)(sum * sum);
-            if (e > 32) return 999999; // Early exit
-        }
-        return e;
-    };
-
-    long long curr_e = calc_energy(A, B);
+    int COARSE_FLIP_NUM = std::max(2, L / 12); 
+    int FINE_TUNE_LIMIT = L * 25;              
     
-    // LAHC Setup
-    const int HISTORY_LEN = (L > 60) ? 5000 : 2000;
-    std::vector<long long> history(HISTORY_LEN, curr_e);
-    int h_idx = 0;
-    long long step = 0;
-    const long long RESET_STEPS = 5000000LL;
+    SequenceState st(L);
+    long long iteration = 0;
+    long long restarts = 0;
+
+    std::cout << "[INIT] Worker=" << worker_id << " L=" << L << std::endl;
 
     while (true) {
-        step++;
+        restarts++;
+        // 50% Sym start (helps initialization), 50% Random start
+        st.randomize(rng, (rng.next_int(2) == 0));
 
-        // 備份
-        uint128 old_A = A;
-        uint128 old_B = B;
+        int stuck = 0;
+        int fine_counter = 0;
+        
+        while (stuck < 800) { 
+            iteration++;
+            
+            // Victory Check
+            if (st.bad_count == 0) {
+                std::cout << "[EVENT] Action=VICTORY Worker=" << worker_id << std::endl;
+                save_result(out_dir, st);
+                return; // Stop worker on success
+            }
 
-        // 突變
-        int p = rng.next_int(L);
-        if (rng.next_bit()) A ^= ((uint128)1 << p);
-        else                B ^= ((uint128)1 << p);
-
-        // 計算
-        long long new_e = calc_energy(A, B);
-
-        // LAHC
-        if (new_e <= curr_e || new_e <= history[h_idx]) {
-            curr_e = new_e;
-            if (curr_e <= 32) {
-                if (curr_e == 32 && strict_check<L>(A, B)) {
-                    save_result(out_dir, A, B, L);
-                    return; // 找到即退出
+            if (st.bad_k_list.empty()) { st.update_metrics(); continue; }
+            
+            bool move_made = false;
+            int start_i = rng.next_int(L); 
+            
+            // Scan for targeted repairs
+            for (int scan = 0; scan < L; ++scan) {
+                int i = (start_i + scan) % L;
+                
+                // Check A
+                auto resA = st.evaluate_flip(0, i);
+                if (resA.d_bad < 0 || (resA.d_bad == 0 && resA.d_viol < 0)) {
+                    st.apply_flip(0, i);
+                    move_made = true;
+                    if (st.bad_count <= 2) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
+                    stuck = 0;
+                    break; 
+                }
+                
+                // Check B
+                auto resB = st.evaluate_flip(1, i);
+                if (resB.d_bad < 0 || (resB.d_bad == 0 && resB.d_viol < 0)) {
+                    st.apply_flip(1, i);
+                    move_made = true;
+                    if (st.bad_count <= 2) std::cout << "[EVENT] Action=Dive BadK=" << st.bad_count << std::endl;
+                    stuck = 0;
+                    break;
                 }
             }
-        } else {
-            // 還原
-            A = old_A;
-            B = old_B;
-        }
-
-        // 更新歷史
-        history[h_idx] = curr_e;
-        h_idx++;
-        if (h_idx >= HISTORY_LEN) h_idx = 0;
-
-        // 強制重置
-        if (step > RESET_STEPS) {
-            step = 0;
-            rand_init();
-            curr_e = calc_energy(A, B);
-            std::fill(history.begin(), history.end(), curr_e);
+            
+            if (move_made) {
+                fine_counter++;
+            } else {
+                // Kick strategy
+                for(int f=0; f<COARSE_FLIP_NUM; ++f) st.apply_flip(rng.next_int(2), rng.next_int(L));
+                
+                if (stuck % 100 == 0 && st.bad_count < 8) {
+                     std::cout << "[EVENT] Action=KICK BadK=" << st.bad_count << std::endl;
+                }
+                stuck++;
+            }
+            
+            // Heartbeat (~0.5s)
+            if (iteration % 50000 == 0) {
+                std::cout << "[STAT] Iter=" << iteration 
+                          << " Restarts=" << restarts 
+                          << " BadK=" << st.bad_count 
+                          << std::endl;
+            }
+            
+            if (fine_counter > FINE_TUNE_LIMIT) break; 
         }
     }
 }
 
-// ---------------------------------------------------------
-// Main Dispatcher
-// ---------------------------------------------------------
 int main(int argc, char* argv[]) {
-    if (argc < 3) return 1;
-    int target_L = std::stoi(argv[1]);
+    if (argc < 4) return 1;
+    int L = std::stoi(argv[1]);
     std::string out_dir = argv[2];
-
-    switch(target_L) {
-        case 44: run_optimization<44>(out_dir); break;
-        case 46: run_optimization<46>(out_dir); break;
-        case 58: run_optimization<58>(out_dir); break;
-        case 68: run_optimization<68>(out_dir); break;
-        case 86: run_optimization<86>(out_dir); break;
-        case 90: run_optimization<90>(out_dir); break;
-        case 94: run_optimization<94>(out_dir); break;
-        default: 
-            std::cerr << "[Error] L=" << target_L << " not supported in optimized build.\n";
-            return 1;
-    }
-
+    int worker_id = std::stoi(argv[3]);
+    
+    std::cout.setf(std::ios::unitbuf);
+    run_solver(L, out_dir, worker_id);
     return 0;
 }
