@@ -208,3 +208,7 @@ powershell -Command ^
 
 echo [DONE] 安裝完成。請重啟 CMD/VSCode。
 pause
+
+run_all_process.sh 當把資料放進results-c/results by computer/N96141066-T1-1時會自動將全部資料處理過並放到results-final  N96141066為ID 可更改 但須要到optimal{x}.sh中進行變更 T1-x類別中 T1為Goal1與2 相同邏輯運算 第x台電腦  T2為Goal3用 若路徑不同則修改results-c資料夾與對應腳本即可
+
+最後統整會在results-final/optimal{x}_summary.txt中
