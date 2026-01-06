@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =========================================================
-# PACP Manager V23.2 (Atomic Append Edition)
+# PACP Manager V23.3 (Visual Cursor Edition)
 # Usage: ./run_pqcp.sh <NumWorkers> <Length>
 # =========================================================
 
@@ -14,7 +14,7 @@ fi
 NUM_WORKERS=$1
 TARGET_L=$2
 
-# 2. 設定 T2-4 路徑
+# 2. 設定路徑
 RESULTS_ROOT="results-c/results by computer/N96141066-T2-4"
 LOG_DIR="./logs_pqcp"
 BIN_DIR="./bin"
@@ -27,7 +27,7 @@ else echo "Error: Binary not found!"; exit 1; fi
 
 mkdir -p "$LOG_DIR" "$RESULTS_ROOT"
 
-# 目標檔案：所有 Worker 都寫入這同一個檔案
+# 目標檔案
 TARGET_SUBDIR="${RESULTS_ROOT}/${TARGET_L}_PACP"
 SOL_FILE="${TARGET_SUBDIR}/${TARGET_L}_solutions.txt"
 
@@ -50,7 +50,7 @@ kill_workers() {
 }
 
 cleanup() {
-    echo -ne "\033[?25h"
+    echo -ne "\033[?25h" # 確保結束時游標可見
     kill_workers
     echo -e "\n\033[1;31m[System] Stopped.\033[0m"
     exit 0
@@ -66,9 +66,10 @@ for ((i=1; i<=NUM_WORKERS; i++)); do
 done
 
 # ---------------------------------------------------------
-# 4. 即時儀表板
+# 4. 即時儀表板 (視覺化更新)
 # ---------------------------------------------------------
-echo -ne "\033[?25l"
+# [關鍵調整] 顯式開啟游標，讓您看到更新過程
+echo -ne "\033[?25h" 
 clear
 START_TIME=$(date +%s)
 
@@ -83,16 +84,17 @@ while true; do
     if [ -f "$SOL_FILE" ]; then CURR_COUNT=$(grep -c . "$SOL_FILE"); else CURR_COUNT=0; fi
     NEW_FOUND=$((CURR_COUNT - INIT_COUNT))
 
-    # Header
+    # [視覺核心] 游標歸位左上角 (不清除整個螢幕，避免閃爍)
     echo -ne "\033[H"
-    echo -e "${C_BLU}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${C_RST}"
-    printf "${C_BLU}┃${C_WHT} PQCP Hunter | L=%-3d | Time: %-4ss | ${C_GRN}New: %-3d${C_WHT} (Tot:%-3d)   ${C_BLU}┃${C_RST}\n" \
+    
+    echo -e "${C_BLU}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${C_RST}\033[K"
+    printf "${C_BLU}┃${C_WHT} PQCP Hunter | L=%-3d | Time: %-4ss | ${C_GRN}New: %-3d${C_WHT} (Tot:%-3d)   ${C_BLU}┃${C_RST}\033[K\n" \
            "$TARGET_L" "$ELAPSED" "$NEW_FOUND" "$CURR_COUNT"
-    echo -e "${C_BLU}┣━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫${C_RST}"
-    echo -e "${C_BLU}┃${C_WHT} ID   ┃ Iter     ┃ Restarts ┃ Viol ┃ Status                     ${C_BLU}┃${C_RST}"
-    echo -e "${C_BLU}┣━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫${C_RST}"
+    echo -e "${C_BLU}┣━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫${C_RST}\033[K"
+    echo -e "${C_BLU}┃${C_WHT} ID   ┃ Iter     ┃ Restarts ┃ Viol ┃ Status                     ${C_BLU}┃${C_RST}\033[K"
+    echo -e "${C_BLU}┣━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫${C_RST}\033[K"
 
-    # Workers
+    # Workers Loop
     for ((i=1; i<=NUM_WORKERS; i++)); do
         LOG="$LOG_DIR/worker_${i}.log"
         ITER="-"; RST="-"; VIOL="-"; STATE="BOOT"; COLOR=$C_GRY
@@ -109,7 +111,7 @@ while true; do
                 VIOL=$(echo "$RAW" | grep -o 'Viol=[0-9]*' | cut -d= -f2)
                 
                 V_VAL=${VIOL:-99}
-                if [ "$V_VAL" == "0" ]; then COLOR=$C_GREEN; STATE="POLISHING";
+                if [ "$V_VAL" == "0" ]; then COLOR=$C_GRN; STATE="POLISHING";
                 elif [ "$V_VAL" -le 4 ]; then COLOR=$C_YEL; STATE="CONVERGING";
                 else COLOR=$C_RED; STATE="SEARCHING"; fi
             fi
@@ -117,16 +119,21 @@ while true; do
             if grep -q "NEW_SOL" "$LOG"; then STATE="★ FOUND ★"; COLOR=$C_WHT; fi
         fi
         
+        # \033[K 確保該行右側髒資料被清除
         printf "${C_BLU}┃${C_RST} #%-3d  ${C_BLU}┃${C_RST} ${C_GRY}%-8s${C_RST} ${C_BLU}┃${C_RST} ${C_GRY}%-8s${C_RST} ${C_BLU}┃${C_RST} ${COLOR}%-4s${C_RST} ${C_BLU}┃${C_RST} ${COLOR}%-26s${C_RST} ${C_BLU}┃${C_RST}\033[K\n" \
                "$i" "${ITER:0:8}" "${RST:0:6}" "${VIOL:0:4}" "$STATE"
     done
-    echo -e "${C_BLU}┗━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${C_RST}"
+    echo -e "${C_BLU}┗━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${C_RST}\033[K"
 
     # Show latest result
     if [ "$NEW_FOUND" -gt 0 ] && [ -f "$SOL_FILE" ]; then
-        echo -e "\n${C_GREEN}>>> LATEST HIT <<<${C_RST}"
+        echo -e "\n${C_GRN}>>> LATEST HIT <<<${C_RST}\033[K"
         tail -n 1 "$SOL_FILE" | cut -c 1-80
+        echo -ne "\033[K" # Clear extra line
     fi
+    
+    # 清除螢幕剩餘部分 (防止殘留)
+    echo -ne "\033[J"
     
     sleep 0.2
 done
