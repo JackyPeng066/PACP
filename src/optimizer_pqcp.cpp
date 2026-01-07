@@ -1,11 +1,10 @@
 /*
-   PQCP Optimizer v26.0 - L44/46 Specialist
+   PQCP Optimizer v38.0 - STABLE & COOL
+   Target: L=44, 46, 58
    Features:
-     - Conjugate Pair Flip (Targeted correction for specific lags)
-     - Dynamic Tabu Tensor
-     - Max-Violation Guided Kick
-   
-   Warning: Highly aggressive optimization logic.
+     - Aggressive CPU Cooling (Sleep every 2048 iters)
+     - Reduced I/O Frequency (Prevents shell read errors)
+     - Strict Peak Logic
 */
 
 #include <iostream>
@@ -17,45 +16,70 @@
 #include <string>
 #include <sstream>
 #include <cstdlib>
-#include <deque>
 #include <cstring>
-#include <tuple>
+#include <chrono>
+#include <iomanip>
+#include <cstdint>
+#include <thread>
+#include <filesystem>
+#include <deque>
 #include "../lib/pqcp_tuner.h" 
 
-// --- 高效能 RNG ---
-struct XorShift128 {
-    uint32_t x, y, z, w;
-    XorShift128(uint32_t seed) {
-        x = seed; y = 362436069; z = 521288629; w = 88675123;
-        for(int i=0; i<50; ++i) next(); 
+// --- RNG ---
+struct XorShift256 {
+    uint64_t s[4];
+    XorShift256(uint64_t seed) {
+        uint64_t z = seed + 0x9E3779B97F4A7C15ULL;
+        for (int i = 0; i < 4; ++i) {
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+            s[i] = z ^ (z >> 31);
+        }
     }
-    inline uint32_t next() {
-        uint32_t t = x ^ (x << 11);
-        x = y; y = z; z = w;
-        return w = w ^ (w >> 19) ^ t ^ (t >> 8);
+    inline uint64_t next() {
+        const uint64_t result = s[0] + s[3];
+        const uint64_t t = s[1] << 17;
+        s[2] ^= s[0];
+        s[3] ^= s[1];
+        s[1] ^= s[2];
+        s[0] ^= s[3];
+        s[2] ^= t;
+        s[3] = (s[3] << 45) | (s[3] >> 19);
+        return result;
     }
     inline int next_int(int range) { return next() % range; }
-    inline double next_double() { return (double)next() / 4294967296.0; }
+    inline double next_double() { return (next() >> 11) * 0x1.0p-53; }
 };
 
-// --- 序列狀態 ---
+// --- Tabu ---
+struct SimpleTabu {
+    std::vector<int> data;
+    size_t idx = 0;
+    SimpleTabu(int size) { data.resize(size, -1); }
+    void add(int p) { data[idx] = p; idx = (idx + 1) % data.size(); }
+    bool contains(int p) const { 
+        for(int v : data) if(v == p) return true; 
+        return false; 
+    }
+    void clear() { std::fill(data.begin(), data.end(), -1); }
+};
+
+// --- Sequence State ---
 class SequenceState {
 public:
     int L;
     std::vector<int8_t> A, B; 
-    std::vector<int8_t> ext_A, ext_B; // 3x Buffer
+    std::vector<int8_t> ext_A, ext_B; 
     std::vector<int> sum_rho;
     
-    // Metrics
     int violations = 0; 
-    long long total_energy = 0; 
-    long long kurtosis_proxy = 0; 
-    int max_violation_shift = 0; // [New] 紀錄最大違規的位置
+    int peak_count = 0; 
+    int max_sidelobe = 0;
+    long long total_energy = 0;
 
     SequenceState(int length) : L(length) {
         A.resize(L); B.resize(L);
-        ext_A.resize(3 * L);
-        ext_B.resize(3 * L);
+        ext_A.resize(3 * L); ext_B.resize(3 * L);
         sum_rho.resize(L);
     }
 
@@ -63,7 +87,6 @@ public:
         std::memcpy(ext_A.data(), A.data(), L);
         std::memcpy(ext_A.data() + L, A.data(), L);
         std::memcpy(ext_A.data() + 2*L, A.data(), L);
-
         std::memcpy(ext_B.data(), B.data(), L);
         std::memcpy(ext_B.data() + L, B.data(), L);
         std::memcpy(ext_B.data() + 2*L, B.data(), L);
@@ -74,10 +97,15 @@ public:
         base[p] = base[p+L] = base[p+2*L] = val;
     }
 
-    void randomize(XorShift128& rng) {
-        for(int i=0; i<L; ++i) {
-            A[i] = (rng.next() & 1) ? 1 : -1;
-            B[i] = (rng.next() & 1) ? 1 : -1;
+    void randomize(XorShift256& rng) {
+        double r = rng.next_double();
+        if (r < 0.3) { 
+            for(int i=0; i<L; ++i) {
+                if(i%2==0) { A[i] = (rng.next()&1)?1:-1; B[i] = (rng.next()&1)?1:-1; }
+                else { A[i] = A[i-1]; B[i] = -B[i-1]; }
+            }
+        } else { 
+            for(int i=0; i<L; ++i) { A[i] = (rng.next()&1)?1:-1; B[i] = (rng.next()&1)?1:-1; }
         }
         sync_buffers();
     }
@@ -86,349 +114,242 @@ public:
         std::fill(sum_rho.begin(), sum_rho.end(), 0);
         const int8_t* ptrA = ext_A.data() + L;
         const int8_t* ptrB = ext_B.data() + L;
-        
         for (int u = 0; u < L; ++u) {
             int r = 0;
             #pragma GCC ivdep
-            for (int i = 0; i < L; ++i) {
-                r += ptrA[i] * ptrA[i + u] + ptrB[i] * ptrB[i + u];
-            }
+            for (int i = 0; i < L; ++i) r += ptrA[i] * ptrA[i + u] + ptrB[i] * ptrB[i + u];
             sum_rho[u] = r;
         }
         update_metrics();
     }
 
     void update_metrics() {
-        violations = 0;
-        total_energy = 0;
-        kurtosis_proxy = 0;
-        max_violation_shift = 0;
-        int max_val = 0;
-
+        violations = 0; peak_count = 0; max_sidelobe = 0; total_energy = 0;
         int limit = L / 2;
         for (int u = 1; u <= limit; ++u) {
-            int abs_val = std::abs(sum_rho[u]);
-            
-            if (abs_val > 4) {
-                violations++;
-                // 追蹤最大違規位置，用於 Targeted Kick
-                if (abs_val > max_val) {
-                    max_val = abs_val;
-                    max_violation_shift = u;
-                }
-            }
-            total_energy += abs_val;
-            if (abs_val > 0) kurtosis_proxy += (abs_val * abs_val); 
-        }
-    }
-
-    bool is_strict_pqcp() const {
-        if (violations > 0) return false;
-        int peaks = 0;
-        for (int u = 1; u < L; ++u) {
             int val = std::abs(sum_rho[u]);
-            if (val != 0) {
-                if (val != 4) return false;
-                peaks++;
-            }
+            if (val > max_sidelobe) max_sidelobe = val;
+            int weight = (u == limit && L % 2 == 0) ? 1 : 2;
+            total_energy += val * weight;
+            if (val > 4) violations += weight;
+            if (val > 0) peak_count += weight;
         }
-        return (peaks == 2);
     }
 
-    struct EvalResult { int d_viol; int d_energy; int d_kurtosis; };
-
-    // --- 單點翻轉評估 ---
-    inline EvalResult evaluate_flip(int seq_idx, int p) const {
+    struct ScoreDesc { int d_viol; int d_energy; };
+    inline ScoreDesc evaluate_descent(int seq_idx, int p) const {
         const int8_t* center_ptr = (seq_idx == 0) ? (ext_A.data() + L + p) : (ext_B.data() + L + p);
         int val_p = *center_ptr;
-        
-        int d_viol = 0; int d_energy = 0; int d_kurtosis = 0;
         int limit = L >> 1;
         const int* rho_ptr = sum_rho.data();
+        int d_viol = 0; int d_energy = 0;
 
         for (int u = 1; u <= limit; ++u) {
             int sum_neighbors = center_ptr[u] + center_ptr[-u]; 
             if (sum_neighbors == 0) continue; 
-
             int delta = -2 * val_p * sum_neighbors;
-            
             int abs_old = std::abs(rho_ptr[u]);
             int abs_new = std::abs(rho_ptr[u] + delta);
-            
-            if (abs_old > 4 && abs_new <= 4) d_viol--;
-            else if (abs_old <= 4 && abs_new > 4) d_viol++;
-            
-            d_energy += (abs_new - abs_old);
-            d_kurtosis += (abs_new * abs_new - abs_old * abs_old);
+            if (abs_old == abs_new) continue;
+            int weight = (u == limit && L % 2 == 0) ? 1 : 2;
+
+            if (abs_old > 4 && abs_new <= 4) d_viol -= weight;
+            else if (abs_old <= 4 && abs_new > 4) d_viol += weight;
+            d_energy += (abs_new - abs_old) * weight;
         }
-        return {d_viol, d_energy, d_kurtosis};
+        return {d_viol, d_energy};
     }
 
-    // --- [v26 新功能] 雙點共軛翻轉評估 ---
-    // 同時翻轉 p 和 (p+offset)%L
-    inline EvalResult evaluate_pair_flip(int seq_idx, int p, int offset) const {
-        // 為了效能，這裡我們模擬兩次單點翻轉的疊加
-        // 注意：這是一個近似 (Approximation)，但在 Loop 中足夠精確且快
-        
-        EvalResult r1 = evaluate_flip(seq_idx, p);
-        int p2 = (p + offset) % L;
-        
-        // 如果重疊，退化為不動 (翻兩次等於沒翻)
-        if (p == p2) return {0, 0, 0};
+    struct ScoreShape { int d_peaks; int d_energy; bool valid; };
+    inline ScoreShape evaluate_shaping(int seq_idx, int p) const {
+        const int8_t* center_ptr = (seq_idx == 0) ? (ext_A.data() + L + p) : (ext_B.data() + L + p);
+        int val_p = *center_ptr;
+        int limit = L >> 1;
+        const int* rho_ptr = sum_rho.data();
+        int d_peaks = 0; int d_energy = 0;
 
-        EvalResult r2 = evaluate_flip(seq_idx, p2);
+        for (int u = 1; u <= limit; ++u) {
+            int sum_neighbors = center_ptr[u] + center_ptr[-u]; 
+            if (sum_neighbors == 0) continue; 
+            int delta = -2 * val_p * sum_neighbors;
+            int abs_old = std::abs(rho_ptr[u]);
+            int abs_new = std::abs(rho_ptr[u] + delta);
+            if (abs_new > 4) return {0, 0, false}; 
+            int weight = (u == limit && L % 2 == 0) ? 1 : 2;
 
-        // 簡單疊加 (忽略兩點之間的交互作用項，這是為了速度的妥協)
-        // 在大多數情況下，交互作用項只影響 lag=offset 的那一點
-        return {r1.d_viol + r2.d_viol, r1.d_energy + r2.d_energy, r1.d_kurtosis + r2.d_kurtosis};
+            if (abs_old > 0 && abs_new == 0) d_peaks -= weight;
+            else if (abs_old == 0 && abs_new > 0) d_peaks += weight;
+            d_energy += (abs_new - abs_old) * weight;
+        }
+        return {d_peaks, d_energy, true};
     }
 
     void apply_flip(int seq_idx, int p) {
         const int8_t* center_ptr = (seq_idx == 0) ? (ext_A.data() + L + p) : (ext_B.data() + L + p);
         int val_p = *center_ptr;
         int limit = L; 
-        for (int u = 1; u < limit; ++u) {
-             sum_rho[u] += -2 * val_p * (center_ptr[u] + center_ptr[-u]);
-        }
+        for (int u = 1; u < limit; ++u) sum_rho[u] += -2 * val_p * (center_ptr[u] + center_ptr[-u]);
         int8_t new_val = -val_p;
         std::vector<int8_t>& seq = (seq_idx == 0) ? A : B;
         seq[p] = new_val;
         update_single_buffer(seq_idx, p, new_val);
         update_metrics(); 
     }
-    
-    // 針對最大違規的踢擊
-    void targeted_kick(XorShift128& rng) {
-        if (max_violation_shift == 0) {
-            mutate_block(rng, 4);
-            return;
-        }
-        // 針對導致最大違規的間距進行破壞
-        int u = max_violation_shift;
-        int start = rng.next_int(L);
-        // 翻轉一對間距為 u 的 bits
-        int seq_idx = rng.next_int(2);
-        apply_flip(seq_idx, start);
-        apply_flip(seq_idx, (start + u) % L);
-    }
 
-    void mutate_block(XorShift128& rng, int size) {
-        int start = rng.next_int(L);
-        int target = rng.next_int(2);
-        for(int k=0; k<size; ++k) apply_flip(target, (start+k)%L);
+    void mutate(XorShift256& rng, int strength) {
+        for(int k=0; k<strength; ++k) apply_flip(rng.next_int(2), rng.next_int(L));
     }
 };
 
-void save_result(const std::string& base_dir, const SequenceState& st) {
-    std::string sub_dir = std::to_string(st.L) + "_PACP";
-    std::string full_dir = base_dir + "/" + sub_dir;
-    std::string cmd = "mkdir -p \"" + full_dir + "\"";
-    system(cmd.c_str()); 
-
-    std::string filename = std::to_string(st.L) + "_solutions.txt";
-    std::string full_path = full_dir + "/" + filename;
-    
-    int max_s = 0;
-    for(int u=1; u<st.L; ++u) max_s = std::max(max_s, std::abs(st.sum_rho[u]));
-
-    std::stringstream ss;
-    ss << st.L << "," << max_s << ",";
-    for(auto x : st.A) ss << (x > 0 ? "+" : "-");
-    ss << ",";
-    for(auto x : st.B) ss << (x > 0 ? "+" : "-");
-    ss << "\n"; 
-
-    std::ofstream outfile(full_path, std::ios::app);
-    if (outfile.is_open()) {
-        outfile.write(ss.str().c_str(), ss.str().length());
-        outfile.close(); 
-        std::cout << "\n[EVENT] NEW_SOL_SAVED L=" << st.L << " PSL=" << max_s << std::endl;
+// --- Path Management ---
+struct PathManager {
+    std::string sol_file, near_file, status_file;
+    PathManager(std::string root, int L, int worker_id) {
+        std::string main_dir = root + "/" + std::to_string(L) + "_PACP";
+        std::string worker_dir = main_dir + "/Workers/Worker_" + std::to_string(worker_id);
+        std::string cmd = "mkdir -p \"" + worker_dir + "\"";
+        system(cmd.c_str());
+        sol_file = main_dir + "/" + std::to_string(L) + "_PQCP.txt";
+        near_file = main_dir + "/" + std::to_string(L) + "_near.txt";
+        status_file = worker_dir + "/status.txt";
     }
-}
-
-// --- Dynamic Tabu ---
-struct TabuManager {
-    // 1. 先定義結構
-    struct Entry { 
-        int seq_idx; 
-        int pos; 
-    };
-
-    // 2. 再宣告容器
-    std::deque<Entry> list;
-    size_t max_size;
-
-    TabuManager(int size) : max_size((size_t)size) {}
-
-    void add(int seq_idx, int pos) {
-        Entry new_entry = {seq_idx, pos};
-        list.push_back(new_entry);
-        if (list.size() > max_size) list.pop_front();
-    }
-
-    // 3. 顯式指定類型，避免 auto 推導失敗亮紅線
-    bool is_tabu(int seq_idx, int pos) const {
-        for (const Entry& e : list) {
-            if (e.seq_idx == seq_idx && e.pos == pos) return true;
+    void save(const SequenceState& st, bool is_strict) {
+        std::string target = is_strict ? sol_file : near_file;
+        std::ofstream outfile(target, std::ios::app);
+        if (outfile.is_open()) {
+            outfile << (is_strict ? "PQCP" : "NEAR") << ",L=" << st.L 
+                    << ",Max=" << st.max_sidelobe 
+                    << ",Peaks=" << st.peak_count << ",";
+            for(auto x : st.A) outfile << (x > 0 ? "+" : "-");
+            outfile << ",";
+            for(auto x : st.B) outfile << (x > 0 ? "+" : "-");
+            outfile << "\n";
         }
-        return false;
     }
-
-    void resize(int new_size) {
-        max_size = (size_t)new_size;
-        while(list.size() > max_size) list.pop_front();
+    void update_dashboard(long long iter, int rst, int viol, int peaks, long long found) {
+        std::ofstream stat(status_file, std::ios::trunc);
+        if (stat.is_open()) {
+            stat << "Iter=" << iter << " Rst=" << rst << " Viol=" << viol 
+                 << " Peaks=" << peaks << " Sol=" << found << "\n";
+        }
     }
-
-    void clear() { list.clear(); }
 };
 
-// --- Solver Process ---
 void run_solver(int L, const std::string& out_dir, int worker_id) {
-    std::cout << "[BOOT] Worker " << worker_id << " L=" << L << " (Dual-Flip Enabled)" << std::endl;
-    
-    unsigned int seed = std::random_device{}() + (worker_id * 777);
-    XorShift128 rng(seed);
-    
+    uint64_t seed_val = (uint64_t)worker_id * 0x5851F42D4C957F2D + 
+                        (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    XorShift256 rng(seed_val);
     SequenceState st(L);
-    // 參數特化：L=44/46 需要稍長的 Tabu
-    int base_tabu_size = std::max(6, L / 6);
-    TabuManager tabu(base_tabu_size);
+    PathManager paths(out_dir, L, worker_id);
+    SimpleTabu tabu(std::max(4, L/8));
 
-    auto reset_sequence = [&]() {
-        st.randomize(rng);
-        SeedRefiner::repair_seed_for_pqcp(st.A, st.B, L, rng);
-        st.sync_buffers();
-        st.full_recalc();
-        tabu.clear();
+    int SMALL_KICK_LIMIT = L * 20; 
+    int BIG_KICK_LIMIT   = L * 200;
+    int RESTART_LIMIT    = L * 2000;
+    
+    long long iter = 0;
+    int stuck = 0;
+    int total_stuck = 0;
+    long long found_count = 0;
+    long long total_restarts = 0;
+
+    auto full_restart = [&]() {
+        st.randomize(rng); st.full_recalc();
+        stuck = 0; total_stuck = 0; tabu.clear();
+        total_restarts++;
     };
 
-    reset_sequence();
+    full_restart();
 
-    long long iter = 0, restarts = 0;
-    int stuck = 0;
-    // L=44/46 耐心要更高
-    int patience_limit = L * 800; 
+    // [CPU Cooling] 強制更頻繁的休眠
+    const int SLEEP_BATCH = 2048; 
 
     while (true) {
         iter++;
+        
+        if (iter % SLEEP_BATCH == 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+        }
 
-        // 0. Success Check
         if (st.violations == 0) {
-            if (st.is_strict_pqcp()) {
-                save_result(out_dir, st);
-                st.targeted_kick(rng); // 找到後，針對性破壞以尋找變體
-                stuck = 0;
-                tabu.clear();
-                continue;
+            if (st.peak_count == 2) { 
+                found_count++;
+                paths.save(st, true);
+                st.mutate(rng, std::max(4, L/3)); stuck = 0; tabu.clear(); continue;
+            } 
+            else if (st.peak_count <= 4) { 
+                if (rng.next_double() < 0.2) paths.save(st, false);
             }
         }
 
-        // 1. Search Logic
         int best_seq = -1, best_p = -1;
-        bool is_pair_move = false;
-        int pair_offset = 0;
-
-        int best_viol_diff = 10000;
-        int best_energy_diff = 10000;
-        int best_kurtosis_diff = -10000;
-
         bool shaping_mode = (st.violations == 0);
+        int checks = std::max(10, (int)(L * 0.4));
         int start_k = rng.next_int(L);
 
-        // A. 嘗試單點翻轉 (Standard)
-        for(int k=0; k<L; ++k) {
-            int p = (start_k + k) % L;
-            for (int seq_idx = 0; seq_idx < 2; ++seq_idx) {
-                if (tabu.is_tabu(seq_idx, p)) continue;
+        int best_viol_diff = 1000;
+        int best_peaks_diff = 1000;
+        int best_energy_diff = 1000;
 
-                auto res = st.evaluate_flip(seq_idx, p);
-                
-                if (!shaping_mode) {
-                    if (res.d_viol < best_viol_diff) {
-                        best_viol_diff = res.d_viol; best_energy_diff = res.d_energy;
-                        best_seq = seq_idx; best_p = p;
-                        if (res.d_viol < 0) goto EXECUTE; 
-                    } else if (res.d_viol == best_viol_diff && res.d_energy < best_energy_diff) {
+        for(int k=0; k<checks; ++k) {
+            int p = (start_k + k) % L;
+            int seq_idx = (k % 2); 
+            if (shaping_mode && tabu.contains(p)) continue;
+
+            if (!shaping_mode) {
+                auto res = st.evaluate_descent(seq_idx, p);
+                if (res.d_viol < best_viol_diff) {
+                    best_viol_diff = res.d_viol; best_energy_diff = res.d_energy;
+                    best_seq = seq_idx; best_p = p;
+                    if (res.d_viol < 0) break; 
+                } else if (res.d_viol == best_viol_diff) {
+                    if (res.d_energy < best_energy_diff) {
                         best_energy_diff = res.d_energy; best_seq = seq_idx; best_p = p;
                     }
-                } else {
-                    if (res.d_viol > 0) continue;
-                    if (res.d_kurtosis > best_kurtosis_diff) {
-                        best_kurtosis_diff = res.d_kurtosis; best_seq = seq_idx; best_p = p;
+                }
+            } else {
+                auto res = st.evaluate_shaping(seq_idx, p);
+                if (!res.valid) continue;
+                int current_dist = std::abs(st.peak_count - 2);
+                int new_dist = std::abs(st.peak_count + res.d_peaks - 2);
+                if (new_dist < current_dist) {
+                    best_peaks_diff = -1; best_energy_diff = res.d_energy;
+                    best_seq = seq_idx; best_p = p;
+                } else if (new_dist == current_dist) {
+                    if (res.d_energy < best_energy_diff) {
+                        best_peaks_diff = 0; best_energy_diff = res.d_energy;
+                        best_seq = seq_idx; best_p = p;
                     }
                 }
             }
         }
 
-        // B. [強化] 如果單點沒路走 (stuck > L/2)，嘗試「針對性雙翻」
-        // 只針對目前最大的 violation shift 進行修正嘗試
-        if ((best_seq == -1 || best_viol_diff >= 0) && stuck > L/4 && st.max_violation_shift > 0) {
-            int u = st.max_violation_shift;
-            for(int k=0; k<L; ++k) {
-                int p = (start_k + k) % L;
-                for(int seq_idx=0; seq_idx<2; ++seq_idx) {
-                    // 評估同時翻轉 p 和 p+u
-                    auto res = st.evaluate_pair_flip(seq_idx, p, u);
-                    
-                    if (res.d_viol < best_viol_diff) {
-                         best_viol_diff = res.d_viol; best_energy_diff = res.d_energy;
-                         best_seq = seq_idx; best_p = p;
-                         is_pair_move = true; pair_offset = u;
-                         if (res.d_viol < 0) goto EXECUTE;
-                    }
-                }
-            }
-        }
-
-        EXECUTE:
         bool accept = false;
         if (best_seq != -1) {
             if (!shaping_mode) {
                 if (best_viol_diff < 0) accept = true;
                 else if (best_viol_diff == 0 && best_energy_diff <= 0) accept = true;
-                // 機率性接受平局，動態 Tabu 處理
-                else if (best_viol_diff == 0 && rng.next_double() < 0.1) accept = true;
+                else if (best_viol_diff == 0 && rng.next_double() < 0.05) accept = true;
             } else {
-                if (best_kurtosis_diff >= 0) accept = true;
-                else if (rng.next_double() < 0.05) accept = true; 
+                if (best_peaks_diff < 0) accept = true;
+                else if (best_peaks_diff == 0 && best_energy_diff <= 0) accept = true;
+                else if (best_peaks_diff == 0 && rng.next_double() < 0.1) accept = true;
             }
         }
 
         if (accept) {
             st.apply_flip(best_seq, best_p);
-            tabu.add(best_seq, best_p);
-            
-            if (is_pair_move) {
-                int p2 = (best_p + pair_offset) % L;
-                st.apply_flip(best_seq, p2);
-                tabu.add(best_seq, p2); // 雙點都入 Tabu
-            }
-
+            if (shaping_mode) tabu.add(best_p);
             stuck = 0;
-            // 成功移動時，Tabu 縮小 (變得靈活)
-            if (tabu.max_size > (size_t)base_tabu_size) tabu.resize(base_tabu_size);
-        } else {
-            stuck++;
-            // 停滯時，Tabu 變大 (強迫探索遠方)
-            if (stuck % 50 == 0) tabu.resize(tabu.max_size + 1);
-        }
+        } else { stuck++; total_stuck++; }
 
-        // 3. Stagnation / Kick
-        if (stuck > patience_limit) {
-            // Targeted Kick: 專門破壞最大旁瓣
-            st.targeted_kick(rng);
-            tabu.clear();
-            tabu.resize(base_tabu_size);
-            stuck = 0;
-            
-            if (iter % (patience_limit * 10) == 0) {
-                restarts++;
-                reset_sequence();
-            }
-        }
+        if (stuck > SMALL_KICK_LIMIT) { st.mutate(rng, 2 + rng.next_int(3)); stuck = 0; tabu.clear(); }
+        if (total_stuck > BIG_KICK_LIMIT) { st.mutate(rng, std::max(6, L/4)); total_stuck = 0; tabu.clear(); }
+        if (total_stuck > RESTART_LIMIT) full_restart();
 
-        if (iter % 5000 == 0) {
-             std::cout << "[STAT] Iter=" << iter << " Rst=" << restarts << " Viol=" << st.violations << " MX=" << st.max_violation_shift << "\r" << std::flush;
+        // 降低 I/O 頻率，避免 Race Condition
+        if (iter % 50000 == 0) {
+            paths.update_dashboard(iter, total_restarts, st.violations, st.peak_count, found_count);
         }
     }
 }
@@ -437,7 +358,6 @@ int main(int argc, char* argv[]) {
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(NULL);
     if (argc < 4) return 1;
-    std::cout.setf(std::ios::unitbuf); 
     run_solver(std::stoi(argv[1]), argv[2], std::stoi(argv[3]));
     return 0;
 }
