@@ -1,93 +1,54 @@
 #!/bin/bash
+# 檔名: optimal1.sh
+# 功能: Goal 1 (Odd) 篩選 - 輸出至 results-final/Goal1_Odd/
 
-# =========================================================
-# optimal1 v3.1 - 完善全量篩選版 (流式處理 + 成功清單)
-# 修正：突破 1003 筆限制，並在報表頂端歸納成功長度
-# =========================================================
+INPUT_DIR="./results-g"
+OUTPUT_DIR="./results-final/Goal1_Odd"
+mkdir -p "$OUTPUT_DIR"
 
-# 1. 設置路徑
-SRC_GOAL="results-g/Goal1"
-DST_ROOT="results-final"
-DST_GOAL="$DST_ROOT/Goal1"
-REPORT="$DST_ROOT/optimal1_summary.txt"
-TARGET_PSL=2
+echo "啟動 Goal 1 (Odd) 篩選 -> 輸出目錄: $OUTPUT_DIR"
 
-echo -e "\033[1;34m>>> 啟動 optimal1 完善版程序 (目標 PSL: $TARGET_PSL) <<<\033[0m"
-
-# 確保目標根目錄存在
-mkdir -p "$DST_GOAL"
-
-# 2. 獲取 L 清單
-ALL_L=$(ls -1 "$SRC_GOAL" 2>/dev/null | grep -E "^[0-9]+$" | sort -n)
-TOTAL_L=$(echo "$ALL_L" | wc -w)
-
-if [ "$TOTAL_L" -eq 0 ]; then
-    echo -e "\033[1;31m❌ 錯誤：在 $SRC_GOAL 中找不到資料夾！\033[0m"
-    exit 1
-fi
-
-# 初始化暫存變數與檔案
-COUNTER=0
-MATCH_TOTAL=0
-SUCCESS_L_LIST=""
-TEMP_FILE=".optimal_temp_$(date +%s)"
-TEMP_REPORT=".report_temp"
-
-# 3. 執行循環處理
-for L in $ALL_L; do
-    ((COUNTER++))
-    SRC_FILE="$SRC_GOAL/$L/pacp_L${L}.txt"
-    DST_DIR="$DST_GOAL/$L"
-    DST_FILE="$DST_DIR/pacp_L${L}.txt"
-
-    echo -ne "\r進度: [ $COUNTER / $TOTAL_L ] 正在篩選 L=$L ...           "
-
-    if [ -f "$SRC_FILE" ]; then
-        # 核心修正：使用流式寫入避開變數長度限制
-        awk -F',' -v t="$TARGET_PSL" '$2 == t' "$SRC_FILE" > "$TEMP_FILE"
+# 掃描 T1 整合檔
+find "$INPUT_DIR" -name "L*_T1_merged.txt" | sort -V | while read FILE; do
+    L=$(basename "$FILE" | grep -o "[0-9]*" | head -1)
+    
+    # 只處理奇數
+    if [ $((L % 2)) -ne 0 ]; then
+        OUT_FILE="${OUTPUT_DIR}/L${L}_Goal1.txt"
         
-        if [ -s "$TEMP_FILE" ]; then
-            mkdir -p "$DST_DIR"
-            mv "$TEMP_FILE" "$DST_FILE"
-            M_COUNT=$(wc -l < "$DST_FILE")
-            ((MATCH_TOTAL++))
-            # 記錄成功的長度
-            SUCCESS_L_LIST="${SUCCESS_L_LIST}${L},"
-        else
-            rm -f "$TEMP_FILE"
-            M_COUNT=0
-        fi
-    else
-        M_COUNT="N/A"
+        # 呼叫 Python 驗證 (PSL=2)
+        python3 -c "
+import sys
+L = int('$L')
+try:
+    with open('$FILE', 'r') as fin, open('$OUT_FILE', 'w') as fout:
+        count = 0
+        for line in fin:
+            line = line.strip()
+            parts = line.replace(',', ' ').split()
+            if len(parts) < 4: continue
+            
+            # 解析序列
+            seqA = [1 if c in '+1' else -1 for c in parts[2] if c in '+-10']
+            seqB = [1 if c in '+1' else -1 for c in parts[3] if c in '+-10']
+            
+            # 驗證 Odd Optimal (所有旁瓣絕對值 == 2)
+            valid = True
+            for u in range(1, L):
+                val = 0
+                for i in range(L):
+                    val += seqA[i]*seqA[(i+u)%L] + seqB[i]*seqB[(i+u)%L]
+                if abs(val) != 2:
+                    valid = False
+                    break
+            
+            if valid:
+                fout.write(line + '\n')
+                count += 1
+        if count > 0:
+            print(f'   [Goal 1] L={L}: 存入 {count} 筆', file=sys.stderr)
+except Exception:
+    pass
+"
     fi
-
-    # 暫存詳細統計表內容
-    printf "%-10s | %-15s\n" "$L" "$M_COUNT" >> "$TEMP_REPORT"
 done
-
-# 4. 整合並輸出最終報表
-{
-    echo "PACP Optimal Selection Report (Goal1) - $(date)"
-    echo "Selection Criteria: PSL == $TARGET_PSL"
-    echo "=========================================="
-    echo "[Success Summary]"
-    if [ -z "$SUCCESS_L_LIST" ]; then
-        echo "optimal_found_at: None"
-    else
-        echo "optimal_found_at: ${SUCCESS_L_LIST%,}"
-    fi
-    echo "Total Lengths with Solutions: $MATCH_TOTAL / $TOTAL_L"
-    echo "=========================================="
-    printf "%-10s | %-15s\n" "Length L" "Optimal Count"
-    echo "------------------------------------------"
-    cat "$TEMP_REPORT"
-    echo "------------------------------------------"
-    echo "End of Report"
-} > "$REPORT"
-
-# 清理暫存
-rm -f "$TEMP_REPORT"
-
-echo -e "\n\n\033[1;32m✅ 篩選完成！\033[0m"
-echo -e "📄 報表位置: \033[1;36m$REPORT\033[0m"
-echo -e "💡 你可以直接在報表頂部查看 \"optimal_found_at\" 清單。"

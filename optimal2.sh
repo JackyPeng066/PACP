@@ -1,95 +1,60 @@
 #!/bin/bash
+# 檔名: optimal2.sh
+# 功能: Goal 2 (Even) 篩選 - 輸出至 results-final/Goal2_Even/
 
-# =========================================================
-# optimal2 v3.1 - 偶數全量篩選版 (目標 PSL=4)
-# 來源: results-g/Goal2 (唯讀)
-# 目標: results-final/Goal2
-# 報表: results-final/optimal2_summary.txt
-# =========================================================
+INPUT_DIR="./results-g"
+OUTPUT_DIR="./results-final/Goal2_Even"
+mkdir -p "$OUTPUT_DIR"
 
-# 1. 設置路徑
-SRC_GOAL="results-g/Goal2"
-DST_ROOT="results-final"
-DST_GOAL="$DST_ROOT/Goal2"
-REPORT="$DST_ROOT/optimal2_summary.txt"
-TARGET_PSL=4  # 根據需求更改為 4
+echo "啟動 Goal 2 (Even) 篩選 -> 輸出目錄: $OUTPUT_DIR"
 
-echo -e "\033[1;34m>>> 啟動 optimal2 程序 (篩選 Goal2, 目標 PSL: $TARGET_PSL) <<<\033[0m"
-
-# 確保目標根目錄存在
-mkdir -p "$DST_GOAL"
-
-# 2. 獲取 L 清單
-ALL_L=$(ls -1 "$SRC_GOAL" 2>/dev/null | grep -E "^[0-9]+$" | sort -n)
-TOTAL_L=$(echo "$ALL_L" | wc -w)
-
-if [ "$TOTAL_L" -eq 0 ]; then
-    echo -e "\033[1;31m❌ 錯誤：在 $SRC_GOAL 中找不到資料夾！\033[0m"
-    exit 1
-fi
-
-# 初始化暫存變數與檔案
-COUNTER=0
-MATCH_TOTAL=0
-SUCCESS_L_LIST=""
-TEMP_FILE=".optimal2_temp_$(date +%s)"
-TEMP_REPORT=".report2_temp"
-
-# 3. 執行循環處理
-for L in $ALL_L; do
-    ((COUNTER++))
-    SRC_FILE="$SRC_GOAL/$L/pacp_L${L}.txt"
-    DST_DIR="$DST_GOAL/$L"
-    DST_FILE="$DST_DIR/pacp_L${L}.txt"
-
-    echo -ne "\r進度: [ $COUNTER / $TOTAL_L ] 正在篩選 L=$L ...           "
-
-    if [ -f "$SRC_FILE" ]; then
-        # 流式寫入，避開 Shell 變數長度限制 (處理超過 1003 筆的關鍵)
-        awk -F',' -v t="$TARGET_PSL" '$2 == t' "$SRC_FILE" > "$TEMP_FILE"
+find "$INPUT_DIR" -name "L*_T1_merged.txt" | sort -V | while read FILE; do
+    L=$(basename "$FILE" | grep -o "[0-9]*" | head -1)
+    
+    # 只處理偶數
+    if [ $((L % 2)) -eq 0 ]; then
+        OUT_FILE="${OUTPUT_DIR}/L${L}_Goal2.txt"
         
-        if [ -s "$TEMP_FILE" ]; then
-            mkdir -p "$DST_DIR"
-            mv "$TEMP_FILE" "$DST_FILE"
-            M_COUNT=$(wc -l < "$DST_FILE")
-            ((MATCH_TOTAL++))
-            # 記錄成功的長度
-            SUCCESS_L_LIST="${SUCCESS_L_LIST}${L},"
-        else
-            rm -f "$TEMP_FILE"
-            M_COUNT=0
-        fi
-    else
-        M_COUNT="N/A"
+        # 呼叫 Python 驗證 (Optimal Even)
+        python3 -c "
+import sys
+L = int('$L')
+try:
+    with open('$FILE', 'r') as fin, open('$OUT_FILE', 'w') as fout:
+        count = 0
+        half_L = L // 2
+        for line in fin:
+            line = line.strip()
+            parts = line.replace(',', ' ').split()
+            if len(parts) < 4: continue
+            
+            seqA = [1 if c in '+1' else -1 for c in parts[2] if c in '+-10']
+            seqB = [1 if c in '+1' else -1 for c in parts[3] if c in '+-10']
+            
+            # 驗證 Even Optimal (ZCZ=0, Peak@L/2=4)
+            valid = True
+            for u in range(1, L):
+                val = 0
+                for i in range(L):
+                    val += seqA[i]*seqA[(i+u)%L] + seqB[i]*seqB[(i+u)%L]
+                
+                abs_val = abs(val)
+                if u == half_L:
+                    if abs_val != 4: 
+                        valid = False
+                        break
+                else:
+                    if abs_val != 0:
+                        valid = False
+                        break
+            
+            if valid:
+                fout.write(line + '\n')
+                count += 1
+        if count > 0:
+            print(f'   [Goal 2] L={L}: 存入 {count} 筆', file=sys.stderr)
+except Exception:
+    pass
+"
     fi
-
-    # 暫存詳細統計表內容
-    printf "%-10s | %-15s\n" "$L" "$M_COUNT" >> "$TEMP_REPORT"
 done
-
-# 4. 整合並輸出最終報表 (加入 SUCCESS 清單)
-{
-    echo "PACP Optimal Selection Report (Goal2) - $(date)"
-    echo "Selection Criteria: PSL == $TARGET_PSL"
-    echo "=========================================="
-    echo "[Success Summary]"
-    if [ -z "$SUCCESS_L_LIST" ]; then
-        echo "optimal_found_at: None"
-    else
-        echo "optimal_found_at: ${SUCCESS_L_LIST%,}"
-    fi
-    echo "Total Lengths with PSL=$TARGET_PSL Solutions: $MATCH_TOTAL / $TOTAL_L"
-    echo "=========================================="
-    printf "%-10s | %-15s\n" "Length L" "Match Count"
-    echo "------------------------------------------"
-    [ -f "$TEMP_REPORT" ] && cat "$TEMP_REPORT"
-    echo "------------------------------------------"
-    echo "End of Report"
-} > "$REPORT"
-
-# 清理暫存
-rm -f "$TEMP_REPORT"
-
-echo -e "\n\n\033[1;32m✅ optimal2 篩選完成！\033[0m"
-echo -e "📄 報表位置: \033[1;36m$REPORT\033[0m"
-echo -e "💡 已完成 Goal2 偶數長度的 PSL=$TARGET_PSL 篩選。"

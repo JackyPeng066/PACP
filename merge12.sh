@@ -1,105 +1,31 @@
 #!/bin/bash
+# 檔名: merge12.sh
+# 功能: T1 系列 (Goal 1 & 2) 依照 L 分開整合
+# 輸出: ./results-g/L<L>_T1_merged.txt
 
-# =========================================================
-# merge12 v5.0 - 正式完整整合版 (高效、低負載、含報表)
-# 來源: results-c/results by computer/N96141066-T1-x/results/L
-# 目標: results-g/Goal1(2)/L
-# =========================================================
+SOURCE_DIR="./results-c/results by computer"
+OUTPUT_DIR="./results-g"
+mkdir -p "$OUTPUT_DIR"
 
-# 1. 設置路徑
-SRC_ROOT="results-c/results by computer"
-DST_ROOT="results-g"
-FOLDERS=("N96141066-T1-1" "N96141066-T1-2" "N96141066-T1-3")
-REPORT="$DST_ROOT/summary_report.txt"
-GOAL1="$DST_ROOT/Goal1"
-GOAL2="$DST_ROOT/Goal2"
+echo "啟動 T1 系列分流整合 (By Length)..."
 
-echo -e "\033[1;34m>>> 啟動全量整合程序... <<<\033[0m"
+# 1. 找出所有 pacp_L*.txt，提取 L 的數字，並排序去重
+# 路徑範例: .../results/27/pacp_L27.txt -> 提取 27
+find "$SOURCE_DIR" -path "*N96141066-T1-*/results/*/pacp_L*.txt" | \
+    grep -o "pacp_L[0-9]*" | grep -o "[0-9]*" | sort -n | uniq | while read L; do
 
-# 建立目錄結構
-mkdir -p "$GOAL1" "$GOAL2"
-
-# 2. 獲取所有數字 L 清單
-echo "正在掃描來源目錄，請稍候..."
-ALL_L=$(for F in "${FOLDERS[@]}"; do 
-    find "$SRC_ROOT/$F/results" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -n 1 basename
-done | grep -E "^[0-9]+$" | sort -u -n)
-
-TOTAL_L=$(echo "$ALL_L" | wc -w)
-echo "掃描完成，共有 $TOTAL_L 個長度需要處理。"
-
-# 初始化報表變數
-ODD_LIST=""
-EVEN_LIST=""
-COUNTER=0
-
-# 3. 核心執行循環
-for L in $ALL_L; do
-    ((COUNTER++))
+    # 定義輸出檔名 (依照 L 分開)
+    OUT_FILE="${OUTPUT_DIR}/L${L}_T1_merged.txt"
     
-    # 分類判斷
-    if (( L % 2 != 0 )); then
-        DEST_DIR="$GOAL1/$L"
-        ODD_LIST="${ODD_LIST}${L},"
-    else
-        DEST_DIR="$GOAL2/$L"
-        EVEN_LIST="${EVEN_LIST}${L},"
-    fi
-
-    mkdir -p "$DEST_DIR"
-
-    # 定位來源路徑
-    L_PATHS=()
-    for F in "${FOLDERS[@]}"; do
-        P="$SRC_ROOT/$F/results/$L"
-        [ -d "$P" ] && L_PATHS+=("$P")
-    done
-
-    # 取得檔案清單並整合
-    ALL_FILES=$(for P in "${L_PATHS[@]}"; do ls -1 "$P" 2>/dev/null; done | sort -u)
-    for FILE in $ALL_FILES; do
-        FILE_SOURCES=()
-        for P in "${L_PATHS[@]}"; do [ -f "$P/$FILE" ] && FILE_SOURCES+=("$P/$FILE"); done
+    echo -ne "正在處理 L=${L} ... "
+    
+    # 2. 針對這個 L，找出所有來源檔案並合併
+    find "$SOURCE_DIR" -type f -path "*N96141066-T1-*/results/${L}/pacp_L${L}.txt" -print0 | \
+        xargs -0 cat | \
+        sort | uniq > "$OUT_FILE"
         
-        OUT_PATH="$DEST_DIR/$FILE"
-        if [[ "$FILE" == *.txt ]]; then
-            # 唯讀原始檔，排序去重寫入新檔
-            cat "${FILE_SOURCES[@]}" | sort | uniq > "$OUT_PATH"
-        else
-            cat "${FILE_SOURCES[@]}" > "$OUT_PATH"
-        fi
-    done
-
-    # 每隔 1 個 L 顯示一次單行進度，避免刷屏
-    echo -ne "\r進度: [ $COUNTER / $TOTAL_L ] 正在處理 L=$L ...         "
+    COUNT=$(wc -l < "$OUT_FILE")
+    echo "完成 (筆數: $COUNT)"
 done
 
-echo -e "\n\n\033[1;32m整合運算完成，正在生成報表...\033[0m"
-
-# 4. 生成 summary_report.txt
-{
-    echo "PACP Merge Summary Report - $(date)"
-    echo "=========================================="
-    echo "[L List Summary]"
-    echo "odd: ${ODD_LIST%,}"
-    echo "even: ${EVEN_LIST%,}"
-    echo "=========================================="
-    printf "%-10s | %-15s | %-10s\n" "Length L" "Category" "Results Count"
-    echo "------------------------------------------"
-    
-    for L in $ALL_L; do
-        if (( L % 2 != 0 )); then 
-            CAT="Odd"; D_PATH="$GOAL1/$L"
-        else 
-            CAT="Even"; D_PATH="$GOAL2/$L"
-        fi
-        
-        TARGET_DATA="$D_PATH/pacp_L${L}.txt"
-        [ -f "$TARGET_DATA" ] && COUNT=$(grep -c "[^[:space:]]" "$TARGET_DATA") || COUNT="0"
-        printf "%-10s | %-15s | %-10s\n" "$L" "$CAT" "$COUNT"
-    done
-} > "$REPORT"
-
-echo -e "\033[1;32m✅ 全量整合作業成功！\033[0m"
-echo -e "📂 整合結果目錄: $DST_ROOT"
-echo -e "📄 數據報表檔案: $REPORT"
+echo "✅ T1 整合完畢。"
